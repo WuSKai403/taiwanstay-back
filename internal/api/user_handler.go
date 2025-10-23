@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -38,8 +39,11 @@ func (h *UserHandler) Register(c *gin.Context) {
 	// 2. 呼叫 Service 層執行業務邏輯
 	user, err := h.userService.RegisterUser(c.Request.Context(), req.Name, req.Email, req.Password)
 	if err != nil {
-		// TODO: 根據錯誤類型回傳不同的 HTTP 狀態碼
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if errors.Is(err, service.ErrEmailAlreadyExists) {
+			c.JSON(http.StatusConflict, gin.H{"error": "email already exists"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to register user"})
 		return
 	}
 

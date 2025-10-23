@@ -2,12 +2,17 @@ package service
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/taiwanstay/taiwanstay-back/internal/domain"
 	"github.com/taiwanstay/taiwanstay-back/internal/repository"
+	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// ErrEmailAlreadyExists 表示 email 已被註冊
+var ErrEmailAlreadyExists = errors.New("email already exists")
 
 // UserService 定義了與使用者相關的業務邏輯介面
 type UserService interface {
@@ -28,13 +33,24 @@ func NewUserService(repo repository.UserRepository) UserService {
 
 // RegisterUser 處理使用者註冊的業務邏輯
 func (s *userService) RegisterUser(ctx context.Context, name, email, password string) (*domain.User, error) {
-	// 1. 密碼加密
+	// 1. 檢查 Email 是否已存在
+	_, err := s.userRepo.GetByEmail(ctx, email)
+	if err == nil {
+		// 找到了使用者，表示 email 已存在
+		return nil, ErrEmailAlreadyExists
+	}
+	if !errors.Is(err, mongo.ErrNoDocuments) {
+		// 如果是除了 "not found" 以外的其他錯誤，就回傳
+		return nil, err
+	}
+
+	// 2. 密碼加密
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err
 	}
 
-	// 2. 建立 User domain 物件
+	// 3. 建立 User domain 物件
 	newUser := &domain.User{
 		Name:     name,
 		Email:    email,
