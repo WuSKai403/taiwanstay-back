@@ -19,15 +19,10 @@ func main() {
 	// ===================================================================
 	// 在未來，這個連線字串應該來自設定檔或環境變數
 	mongoURI := "mongodb://localhost:27017"
-	client, err := mongo.NewClient(options.Client().ApplyURI(mongoURI))
-	if err != nil {
-		log.Fatalf("Failed to create mongo client: %v", err)
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	err = client.Connect(ctx)
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
 	if err != nil {
 		log.Fatalf("Failed to connect to mongo: %v", err)
 	}
@@ -67,5 +62,7 @@ func main() {
 	api.SetupRoutes(router, userHandler)
 
 	// 啟動 HTTP 伺服器，監聽在 8080 port
-	router.Run(":8080")
+	if err := router.Run(":8080"); err != nil {
+		log.Fatalf("Failed to run server: %v", err)
+	}
 }

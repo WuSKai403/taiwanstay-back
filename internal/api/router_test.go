@@ -95,7 +95,8 @@ func TestRegister_Success(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, w.Code)
 
 	var response map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &response)
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
 
 	assert.NotEmpty(t, response["id"])
 	assert.Equal(t, "testuser", response["name"])
@@ -135,7 +136,8 @@ func TestRegister_EmailAlreadyExists(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, w.Code)
 
 	var response map[string]string
-	json.Unmarshal(w.Body.Bytes(), &response)
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
 	assert.Equal(t, "email already exists", response["error"])
 }
 
