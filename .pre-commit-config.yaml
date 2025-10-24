@@ -1,0 +1,35 @@
+# .pre-commit-config.yaml
+
+# 設定預設在 commit 階段執行
+default_stages: [commit]
+# 設定為快速失敗模式，任何一個 hook 失敗就立即停止
+fail_fast: true
+
+repos:
+  # ===================================================================
+  # 1. 通用基礎檢查 (來自 pre-commit 官方)
+  # ===================================================================
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0  # 使用最新的穩定版本
+    hooks:
+      - id: check-merge-conflict # 檢查是否有未解決的合併衝突
+      - id: trailing-whitespace  # 移除行尾多餘的空格
+      - id: end-of-file-fixer    # 確保檔案以一個空行結尾
+
+  # ===================================================================
+  # 2. Go 語言核心檢查 (Linter)
+  # ===================================================================
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v1.59.1 # 建議使用與 CI 中版本一致或相近的 linter 版本
+    hooks:
+      - id: golangci-lint
+
+  # ===================================================================
+  # 3. Commit 訊息格式檢查 (可選，但強烈建議)
+  # ===================================================================
+  - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
+    rev: v9.16.0
+    hooks:
+      - id: commitlint
+        stages: [commit-msg]
+        additional_dependencies: ['@commitlint/config-conventional']

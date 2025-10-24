@@ -11,20 +11,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
         go-version: '1.25'
 
     - name: Install dependencies
       run: go mod download
 
+    - name: Check for un-tidied go.mod
+      run: |
+        go mod tidy
+        git diff --exit-code
+
     - name: Lint
-      uses: golangci/golangci-lint-action@v3
+      uses: golangci/golangci-lint-action@v6
       with:
-        version: v2.5.0
+        version: v1.59.1
         args: --timeout=5m
 
     - name: Test
