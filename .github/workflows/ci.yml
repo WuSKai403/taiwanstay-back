@@ -27,9 +27,9 @@ jobs:
         git diff --exit-code
 
     - name: Lint
-      uses: golangci/golangci-lint-action@v6
+      uses: golangci/golangci-lint-action@v8
       with:
-        version: v1.59.1
+        version: v2.1
         args: --timeout=5m
 
     - name: Test
