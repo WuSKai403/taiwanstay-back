@@ -4,6 +4,7 @@ go 1.25.2
 
 require (
 	github.com/gin-gonic/gin v1.11.0
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go/modules/mongodb v0.39.0
 	go.mongodb.org/mongo-driver v1.17.4
@@ -73,6 +74,7 @@ require (
 	github.com/quic-go/quic-go v0.55.0 // indirect
 	github.com/shirou/gopsutil/v4 v4.25.6 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/testcontainers/testcontainers-go v0.39.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect

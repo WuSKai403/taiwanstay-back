@@ -11,7 +11,7 @@ func SetupRoutes(router *gin.Engine, userHandler *UserHandler) {
 		auth := v1.Group("/auth")
 		{
 			auth.POST("/register", userHandler.Register)
-			// auth.POST("/login", userHandler.Login) // 未來實作
+			auth.POST("/login", userHandler.Login)
 		}
 
 		// 用戶相關路由

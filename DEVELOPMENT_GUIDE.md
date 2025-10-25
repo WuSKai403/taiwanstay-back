@@ -162,21 +162,124 @@ sequenceDiagram
     Router-->>-Client: 回傳使用者資料與 Token
 ```
 
-### 3.3. 測試策略
+### 3.3. 自動化測試策略
 
--   **手動測試**: 提供 `curl` 命令來手動驗證端點功能。
-    ```bash
-    # 範例：測試使用者註冊
-    curl -X POST http://localhost:8080/api/v1/auth/register \
-    -H "Content-Type: application/json" \
-    -d '{
-      "name": "testuser",
-      "email": "test@example.com",
-      "password": "password123"
-    }'
+我們採用分層的測試方法，以確保從最小的邏輯單元到完整的 API 端點都得到驗證。
+
+**A. 推薦函式庫**
+
+| 類別 | 推薦函式庫 | 說明 |
+| :--- | :--- | :--- |
+| **測試框架** | Go `testing` (內建) | Go 官方的測試框架。 |
+| **斷言** | `testify/assert` | 提供豐富的斷言函式，使測試更具可讀性。 |
+| **Mock 工具** | `testify/mock` | 用於建立相依項的 mock 物件，實現隔離測試。 |
+| **整合測試** | `net/http/httptest` (內建) | 用於建立模擬的 HTTP 請求與回應。 |
+| **測試資料庫** | `testcontainers-go` | 以程式化方式管理 Docker 容器，為整合測試提供乾淨的資料庫環境。 |
+
+**B. 單元測試 (Unit Tests)**
+
+-   **目標**: 專注於測試單一的功能模組 (例如 `Service` 層的業務邏輯)，並與外部相依 (如資料庫) 完全隔離。
+-   **位置**: 測試檔案 (`*_test.go`) 應與被測試的原始碼檔案放在同一個目錄下，並使用相同的 `package` 名稱。
+-   **核心實踐**:
+    -   使用 `testify/mock` 模擬 `Repository` 層，避免與真實資料庫互動。
+    -   測試應快速、穩定且可重複執行。
+-   **範例 (`internal/service/user_service_test.go`)**:
+    ```go
+    package service
+
+    import (
+        "context"
+        "testing"
+        "github.com/stretchr/testify/assert"
+        "github.com/stretchr/testify/mock"
+        "go.mongodb.org/mongo-driver/mongo"
+    )
+
+    // 建立 mock repository
+    type mockUserRepository struct {
+        mock.Mock
+    }
+
+    // 實作 mock 方法
+    func (m *mockUserRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
+        args := m.Called(ctx, email)
+        // ...
+    }
+
+    func TestLoginUser_UserNotFound(t *testing.T) {
+        mockRepo := new(mockUserRepository)
+        // 設定 mock 期望：當 GetByEmail 被呼叫時，回傳 ErrNoDocuments
+        mockRepo.On("GetByEmail", mock.Anything, "notfound@example.com").Return(nil, mongo.ErrNoDocuments)
+
+        userService := NewUserService(mockRepo)
+        _, _, err := userService.LoginUser(context.Background(), "notfound@example.com", "password")
+
+        // 斷言：錯誤應為 ErrInvalidCredentials
+        assert.Error(t, err)
+        assert.Equal(t, ErrInvalidCredentials, err)
+        mockRepo.AssertExpectations(t) // 驗證 mock 是否被如期呼叫
+    }
     ```
--   **自動化測試**: 為 `Service` 和 `Repository` 層撰寫單元測試 (`*_test.go`)。
--   **持續整合 (CI)**: 所有程式碼變更都需通過 `.github/workflows/ci.yml` 中定義的 Lint 和 Test 檢查。
+
+**C. 整合測試 (Integration Tests)**
+
+-   **目標**: 測試多個元件協同工作的正確性，特別是從 HTTP `Handler` 到資料庫的完整流程。
+-   **位置**: 測試檔案 (`*_test.go`) 通常放在 `api` 套件目錄下，用於測試 API 端點。
+-   **核心實踐**:
+    -   使用 `testcontainers-go` 在測試執行期間動態啟動一個乾淨的資料庫容器。
+    -   使用 `net/http/httptest` 模擬真實的 HTTP 請求。
+    -   直接與測試資料庫進行互動，驗證資料的正確性。
+-   **範例 (`internal/api/router_test.go`)**:
+    ```go
+    package api
+
+    import (
+        "net/http"
+        "net/http/httptest"
+        "testing"
+        "github.com/gin-gonic/gin"
+        "github.com/stretchr/testify/assert"
+    )
+
+    func TestRegister_Success(t *testing.T) {
+        // 1. 使用 testcontainers-go 設定測試資料庫
+        collection, cleanup := setupTestMongoDB(context.Background())
+        defer cleanup()
+
+        // 2. 設定測試用的 Gin 路由器
+        router := setupTestRouter(collection)
+
+        // 3. 準備並發送 HTTP 請求
+        body := bytes.NewBufferString(`{"name":"test", "email":"test@test.com", "password":"password"}`)
+        req, _ := http.NewRequest("POST", "/api/v1/auth/register", body)
+        req.Header.Set("Content-Type", "application/json")
+
+        w := httptest.NewRecorder()
+        router.ServeHTTP(w, req)
+
+        // 4. 斷言 HTTP 狀態碼和回應內容
+        assert.Equal(t, http.StatusCreated, w.Code)
+    }
+    ```
+
+**D. 測試執行**
+
+-   **執行所有測試**:
+    ```bash
+    go test ./...
+    ```
+-   **執行特定套件的測試**:
+    ```bash
+    go test ./internal/service
+    ```
+-   **查看測試覆蓋率**:
+    ```bash
+    go test -coverprofile=coverage.out ./...
+    go tool cover -html=coverage.out
+    ```
+
+**E. 持續整合 (CI)**
+所有程式碼變更都需通過 `.github/workflows/ci.yml` 中定義的 Lint 和 Test 檢查，確保程式碼品質。
 
 ---
 

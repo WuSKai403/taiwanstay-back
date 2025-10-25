@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/taiwanstay/taiwanstay-back/internal/domain"
 	"github.com/taiwanstay/taiwanstay-back/internal/repository"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -12,22 +13,30 @@ import (
 )
 
 // ErrEmailAlreadyExists 表示 email 已被註冊
-var ErrEmailAlreadyExists = errors.New("email already exists")
+var (
+	ErrEmailAlreadyExists = errors.New("email already exists")
+	ErrInvalidCredentials = errors.New("invalid email or password")
+)
 
 // UserService 定義了與使用者相關的業務邏輯介面
 type UserService interface {
 	RegisterUser(ctx context.Context, name, email, password string) (*domain.User, error)
+	LoginUser(ctx context.Context, email, password string) (*domain.User, string, error)
 }
 
 // userService 是 UserService 的實作
 type userService struct {
-	userRepo repository.UserRepository
+	userRepo      repository.UserRepository
+	jwtSecret     string
+	tokenDuration time.Duration
 }
 
 // NewUserService 建立一個新的 UserService 實例
 func NewUserService(repo repository.UserRepository) UserService {
 	return &userService{
-		userRepo: repo,
+		userRepo:      repo,
+		jwtSecret:     "your-super-secret-key", // TODO: Move to config
+		tokenDuration: time.Hour * 24,          // Token a 24 horas
 	}
 }
 
@@ -80,4 +89,59 @@ func (s *userService) RegisterUser(ctx context.Context, name, email, password st
 	newUser.Password = ""
 
 	return newUser, nil
+}
+
+// LoginUser 處理使用者登入邏輯
+func (s *userService) LoginUser(ctx context.Context, email, password string) (*domain.User, string, error) {
+	// 1. 透過 Email 尋找使用者
+	user, err := s.userRepo.GetByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			// 找不到使用者，回傳無效憑證錯誤
+			return nil, "", ErrInvalidCredentials
+		}
+		// 其他資料庫錯誤
+		return nil, "", err
+	}
+
+	// 2. 比對密碼
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
+	if err != nil {
+		// 密碼不匹配
+		return nil, "", ErrInvalidCredentials
+	}
+
+	// 3. 生成 JWT Token
+	token, err := s.generateJWT(user)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// 4. 清除密碼後回傳
+	user.Password = ""
+
+	return user, token, nil
+}
+
+// generateJWT 根據使用者資訊生成 JWT
+func (s *userService) generateJWT(user *domain.User) (string, error) {
+	// 建立 claims
+	claims := jwt.MapClaims{
+		"sub":  user.ID,
+		"name": user.Name,
+		"role": user.Role,
+		"exp":  time.Now().Add(s.tokenDuration).Unix(),
+		"iat":  time.Now().Unix(),
+	}
+
+	// 建立 token
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	// 簽署 token
+	signedToken, err := token.SignedString([]byte(s.jwtSecret))
+	if err != nil {
+		return "", err
+	}
+
+	return signedToken, nil
 }
