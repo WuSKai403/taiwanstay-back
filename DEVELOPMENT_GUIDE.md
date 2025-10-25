@@ -123,6 +123,18 @@ graph TD
 | **圖片上傳** | `/api/v1/upload` | `upload_handler.go` | `upload_service.go` | `(Cloudinary)` | `media.go` |
 | **圖片審核** | `/api/v1/images/check` | `image_check_handler.go` | `image_check_service.go` | `(Google Vision)` | `media.go` |
 
+### 2.3. API 端點實作狀態
+
+| 狀態 | HTTP 方法 | 端點 | 說明 |
+| :---: | :--- | :--- | :--- |
+| ✅ | `POST` | `/api/v1/auth/register` | 使用者註冊 |
+| ✅ | `POST` | `/api/v1/auth/login` | 使用者登入 |
+| | `POST` | `/api/v1/auth/logout` | 使用者登出 |
+| | `GET` | `/api/v1/users` | 取得所有使用者 (管理員) |
+| | `GET` | `/api/v1/users/:id` | 取得單一使用者 (管理員) |
+| | `GET` | `/api/v1/user/me` | 取得當前登入者資訊 |
+| | `PUT` | `/api/v1/user/me` | 更新當前登入者資訊 |
+
 ---
 
 ## 3. 開發與測試流程
