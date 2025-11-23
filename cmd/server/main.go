@@ -3,66 +3,76 @@ package main
 import (
 	"context"
 	"log"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/taiwanstay/taiwanstay-back/internal/api"
 	"github.com/taiwanstay/taiwanstay-back/internal/repository"
 	"github.com/taiwanstay/taiwanstay-back/internal/service"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"github.com/taiwanstay/taiwanstay-back/pkg/config"
+	"github.com/taiwanstay/taiwanstay-back/pkg/database"
+	"github.com/taiwanstay/taiwanstay-back/pkg/gcp"
+	"github.com/taiwanstay/taiwanstay-back/pkg/logger"
 )
 
 func main() {
-	// ===================================================================
-	// 資料庫連線
-	// ===================================================================
-	// 在未來，這個連線字串應該來自設定檔或環境變數
-	mongoURI := "mongodb://localhost:27017"
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	// 1. Load Config
+	cfg, err := config.LoadConfig()
 	if err != nil {
-		log.Fatalf("Failed to connect to mongo: %v", err)
+		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// 檢查連線
-	err = client.Ping(ctx, nil)
+	// 2. Init Logger
+	logger.InitLogger(cfg.Server.Mode)
+	logger.Info("Starting TaiwanStay Backend", "port", cfg.Server.Port, "env", cfg.Server.Mode)
+
+	// 3. Connect to Database
+	mongoClient, err := database.Connect(cfg.Database.URI)
 	if err != nil {
-		log.Fatalf("Failed to ping mongo: %v", err)
+		logger.Error("Failed to connect to MongoDB", "error", err)
+		log.Fatalf("Failed to connect to MongoDB: %v", err)
+	}
+	defer database.Close(mongoClient)
+	logger.Info("Connected to MongoDB")
+
+	// 4. Init GCP Clients
+	ctx := context.Background()
+	storageClient, err := gcp.NewStorageClient(ctx)
+	if err != nil {
+		logger.Warn("Failed to init GCP Storage Client (Check credentials)", "error", err)
+	} else {
+		defer storageClient.Close()
+		logger.Info("GCP Storage Client initialized")
 	}
 
-	log.Println("Successfully connected to MongoDB!")
+	visionClient, err := gcp.NewVisionClient(ctx)
+	if err != nil {
+		logger.Warn("Failed to init GCP Vision Client (Check credentials)", "error", err)
+	} else {
+		defer visionClient.Close()
+		logger.Info("GCP Vision Client initialized")
+	}
 
-	// 取得 user collection
-	userCollection := client.Database("taiwanstay").Collection("users")
+	// 5. Dependency Injection
+	db := mongoClient.Database(cfg.Database.Database)
+	userCollection := db.Collection("users")
 
-	// ===================================================================
-	// 依賴注入 (Dependency Injection)
-	// ===================================================================
-
-	// 1. 建立 Repository 層
-	userRepository := repository.NewUserRepository(userCollection)
-
-	// 2. 建立 Service 層，並注入 Repository
-	userService := service.NewUserService(userRepository)
-
-	// 3. 建立 Handler 層，並注入 Service
+	userRepo := repository.NewUserRepository(userCollection)
+	userService := service.NewUserService(userRepo)
 	userHandler := api.NewUserHandler(userService)
 
-	// ===================================================================
-	// 伺服器設定
-	// ===================================================================
-
-	// 初始化 Gin 引擎
+	// 6. Setup Server
+	if cfg.Server.Mode == "release" {
+		gin.SetMode(gin.ReleaseMode)
+	}
 	router := gin.Default()
 
-	// 設定所有 API 路由，並傳入 Handler
+	// Setup Routes
 	api.SetupRoutes(router, userHandler)
 
-	// 啟動 HTTP 伺服器，監聽在 8080 port
-	if err := router.Run(":8080"); err != nil {
-		log.Fatalf("Failed to run server: %v", err)
+	// 7. Run Server
+	addr := ":" + cfg.Server.Port
+	logger.Info("Server listening on " + addr)
+	if err := router.Run(addr); err != nil {
+		logger.Error("Failed to run server", "error", err)
 	}
 }

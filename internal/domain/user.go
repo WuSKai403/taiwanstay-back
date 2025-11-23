@@ -53,6 +53,7 @@ type Profile struct {
 	CulturalInterests       []string                 `json:"culturalInterests,omitempty" bson:"culturalInterests,omitempty"`
 	LearningGoals           []string                 `json:"learningGoals,omitempty" bson:"learningGoals,omitempty"`
 	PhoneNumber             string                   `json:"phoneNumber,omitempty" bson:"phoneNumber,omitempty"`
+	Address                 string                   `json:"address,omitempty" bson:"address,omitempty"`
 	IsPhoneVerified         bool                     `json:"isPhoneVerified" bson:"isPhoneVerified"`
 	PreferredWorkHours      int                      `json:"preferredWorkHours" bson:"preferredWorkHours"`
 }

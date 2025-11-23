@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/taiwanstay/taiwanstay-back/internal/domain"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -27,6 +28,27 @@ func (m *mockUserRepository) GetByEmail(ctx context.Context, email string) (*dom
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*domain.User), args.Error(1)
+}
+
+func (m *mockUserRepository) GetAll(ctx context.Context) ([]*domain.User, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.User), args.Error(1)
+}
+
+func (m *mockUserRepository) GetByID(ctx context.Context, id string) (*domain.User, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.User), args.Error(1)
+}
+
+func (m *mockUserRepository) Update(ctx context.Context, id string, payload bson.M) error {
+	args := m.Called(ctx, id, payload)
+	return args.Error(0)
 }
 
 func TestLoginUser(t *testing.T) {

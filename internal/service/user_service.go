@@ -8,6 +8,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/taiwanstay/taiwanstay-back/internal/domain"
 	"github.com/taiwanstay/taiwanstay-back/internal/repository"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -22,6 +23,10 @@ var (
 type UserService interface {
 	RegisterUser(ctx context.Context, name, email, password string) (*domain.User, error)
 	LoginUser(ctx context.Context, email, password string) (*domain.User, string, error)
+	LogoutUser(ctx context.Context) error
+	GetAllUsers(ctx context.Context) ([]*domain.User, error)
+	GetUserByID(ctx context.Context, id string) (*domain.User, error)
+	UpdateUser(ctx context.Context, id string, payload bson.M) (*domain.User, error)
 }
 
 // userService 是 UserService 的實作
@@ -144,4 +149,54 @@ func (s *userService) generateJWT(user *domain.User) (string, error) {
 	}
 
 	return signedToken, nil
+}
+
+// LogoutUser 處理使用者登出邏輯。
+// 在無狀態的 JWT 機制中，主要由客戶端負責銷毀 token。
+// 此函式為未來擴充（如：token 黑名單）預留。
+func (s *userService) LogoutUser(ctx context.Context) error {
+	// 未來可在此處實作 token 黑名單機制，例如將 token 存入 Redis 直到過期。
+	return nil
+}
+
+// GetAllUsers 取得所有使用者資訊
+func (s *userService) GetAllUsers(ctx context.Context) ([]*domain.User, error) {
+	users, err := s.userRepo.GetAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// 為了安全，清除所有使用者的密碼欄位
+	for _, u := range users {
+		u.Password = ""
+	}
+	return users, nil
+}
+
+// GetUserByID 透過 ID 取得單一使用者資訊
+func (s *userService) GetUserByID(ctx context.Context, id string) (*domain.User, error) {
+	user, err := s.userRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	// 為了安全，清除密碼欄位
+	user.Password = ""
+	return user, nil
+}
+
+// UpdateUser 更新使用者資訊
+func (s *userService) UpdateUser(ctx context.Context, id string, payload bson.M) (*domain.User, error) {
+	// 在這裡可以加入業務邏輯，例如檢查欄位、權限等
+	// 為了保持範例簡單，我們直接呼叫 repository
+	err := s.userRepo.Update(ctx, id, payload)
+	if err != nil {
+		return nil, err
+	}
+
+	// 更新成功後，回傳最新的使用者資訊 (不含密碼)
+	updatedUser, err := s.userRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	updatedUser.Password = ""
+	return updatedUser, nil
 }

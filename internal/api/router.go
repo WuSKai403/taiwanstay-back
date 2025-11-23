@@ -12,14 +12,26 @@ func SetupRoutes(router *gin.Engine, userHandler *UserHandler) {
 		{
 			auth.POST("/register", userHandler.Register)
 			auth.POST("/login", userHandler.Login)
+			auth.POST("/logout", userHandler.Logout)
 		}
 
-		// 用戶相關路由
-		// users := v1.Group("/users")
-		// {
-		// 	users.GET("/", GetUsersHandler)
-		// }
+		// 用戶相關路由 (需要管理員權限)
+		users := v1.Group("/users")
+		users.Use(AuthMiddleware())
+		users.Use(AdminAuthMiddleware())
+		{
+			users.GET("/", userHandler.GetAllUsers)
+			users.GET("/:id", userHandler.GetUserByID)
+		}
 
 		// ... 其他資源的路由設定
+
+		// 當前登入者相關路由
+		user := v1.Group("/user")
+		user.Use(AuthMiddleware())
+		{
+			user.GET("/me", userHandler.GetMe)
+			user.PUT("/me", userHandler.UpdateMe)
+		}
 	}
 }

@@ -12,8 +12,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/testcontainers/testcontainers-go/modules/mongodb"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/crypto/bcrypt"
@@ -264,4 +267,196 @@ func TestLogin_UserNotFound(t *testing.T) {
 
 	// 斷言
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+// generateTestToken 根據使用者資訊生成用於測試的 JWT
+func generateTestToken(t *testing.T, user *domain.User) string {
+	jwtSecret := "your-super-secret-key" // 與 middleware 中保持一致
+	tokenDuration := time.Hour * 24
+
+	claims := jwt.MapClaims{
+		"sub":  user.ID,
+		"name": user.Name,
+		"role": user.Role,
+		"exp":  time.Now().Add(tokenDuration).Unix(),
+		"iat":  time.Now().Unix(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signedToken, err := token.SignedString([]byte(jwtSecret))
+	assert.NoError(t, err)
+	return signedToken
+}
+
+// createAndLoginUser 是一個輔助函式，用於在資料庫中建立指定角色的使用者，並返回 userID 和 token
+func createAndLoginUser(t *testing.T, ctx context.Context, name, email, password string, role domain.UserRole) (*domain.User, string) {
+	// 1. 直接在資料庫中建立使用者
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	user := &domain.User{
+		Name:     name,
+		Email:    email,
+		Password: string(hashedPassword),
+		Role:     role,
+	}
+	res, err := testCollection.InsertOne(ctx, user)
+	assert.NoError(t, err)
+	userID := res.InsertedID.(primitive.ObjectID)
+	user.ID = userID.Hex()
+
+	// 2. 產生 token
+	token := generateTestToken(t, user)
+
+	return user, token
+}
+
+func TestGetMe_Success(t *testing.T) {
+	ctx := context.Background()
+	cleanupCollection(ctx)
+
+	// 1. 註冊並登入使用者
+	_, token := createAndLoginUser(t, ctx, "me_user", "me@example.com", "password123", domain.RoleUser)
+
+	// 2. 建立 GetMe 請求
+	req, _ := http.NewRequestWithContext(ctx, "GET", "/api/v1/user/me", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	w := httptest.NewRecorder()
+	testRouter.ServeHTTP(w, req)
+
+	// 3. 斷言
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, "me@example.com", response["email"])
+}
+
+func TestUpdateMe_Success(t *testing.T) {
+	ctx := context.Background()
+	cleanupCollection(ctx)
+
+	// 1. 註冊並登入使用者
+	user, token := createAndLoginUser(t, ctx, "update_user", "update@example.com", "password123", domain.RoleUser)
+	userID := user.ID
+
+	// 2. 準備更新資料
+	updateData := gin.H{
+		"name":              "Updated Name",
+		"physicalCondition": "Excellent",
+		"emergencyContact": gin.H{
+			"name":         "Jane Doe",
+			"relationship": "Spouse",
+			"phone":        "123456789",
+		},
+	}
+	body, _ := json.Marshal(updateData)
+
+	// 3. 建立 UpdateMe 請求
+	req, _ := http.NewRequestWithContext(ctx, "PUT", "/api/v1/user/me", bytes.NewBuffer(body))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	testRouter.ServeHTTP(w, req)
+
+	// 4. 斷言 HTTP 回應
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, "Updated Name", response["name"])
+
+	// 5. 直接從資料庫驗證資料是否真的被更新
+	var updatedUser domain.User
+	objID, _ := primitive.ObjectIDFromHex(userID)
+	err = testCollection.FindOne(ctx, bson.M{"_id": objID}).Decode(&updatedUser)
+	assert.NoError(t, err)
+	assert.Equal(t, "Updated Name", updatedUser.Name)
+	assert.Equal(t, "Excellent", updatedUser.Profile.PhysicalCondition)
+	assert.Equal(t, "Jane Doe", updatedUser.Profile.EmergencyContact.Name)
+}
+
+func TestLogout_Success(t *testing.T) {
+	ctx := context.Background()
+	cleanupCollection(ctx)
+
+	// 1. 註冊並登入使用者
+	_, token := createAndLoginUser(t, ctx, "logout_user", "logout@example.com", "password123", domain.RoleUser)
+
+	// 2. 建立 Logout 請求
+	req, _ := http.NewRequestWithContext(ctx, "POST", "/api/v1/auth/logout", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	w := httptest.NewRecorder()
+	testRouter.ServeHTTP(w, req)
+
+	// 3. 斷言
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response map[string]string
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, "logout successful", response["message"])
+}
+
+func TestAdminActions_SuccessAsAdmin(t *testing.T) {
+	ctx := context.Background()
+	cleanupCollection(ctx)
+
+	// 1. 建立一個管理員和一個普通使用者
+	adminUser, adminToken := createAndLoginUser(t, ctx, "admin", "admin@example.com", "password123", domain.RoleAdmin)
+	normalUser, _ := createAndLoginUser(t, ctx, "user", "user@example.com", "password123", domain.RoleUser)
+	assert.NotEqual(t, adminUser.ID, normalUser.ID)
+
+	// 2. 作為管理員，嘗試獲取所有使用者
+	reqGetAll, _ := http.NewRequestWithContext(ctx, "GET", "/api/v1/users/", nil)
+	reqGetAll.Header.Set("Authorization", "Bearer "+adminToken)
+	wGetAll := httptest.NewRecorder()
+	testRouter.ServeHTTP(wGetAll, reqGetAll)
+
+	// 斷言 GetAllUsers
+	assert.Equal(t, http.StatusOK, wGetAll.Code)
+	var users []map[string]interface{}
+	err := json.Unmarshal(wGetAll.Body.Bytes(), &users)
+	assert.NoError(t, err)
+	assert.Len(t, users, 2) // 應該包含 admin 和 user
+
+	// 3. 作為管理員，嘗試透過 ID 獲取特定使用者
+	reqGetByID, _ := http.NewRequestWithContext(ctx, "GET", "/api/v1/users/"+normalUser.ID, nil)
+	reqGetByID.Header.Set("Authorization", "Bearer "+adminToken)
+	wGetByID := httptest.NewRecorder()
+	testRouter.ServeHTTP(wGetByID, reqGetByID)
+
+	// 斷言 GetUserByID
+	assert.Equal(t, http.StatusOK, wGetByID.Code)
+	var fetchedUser map[string]interface{}
+	err = json.Unmarshal(wGetByID.Body.Bytes(), &fetchedUser)
+	assert.NoError(t, err)
+	assert.Equal(t, normalUser.Email, fetchedUser["email"])
+}
+
+func TestAdminActions_ForbiddenAsUser(t *testing.T) {
+	ctx := context.Background()
+	cleanupCollection(ctx)
+
+	// 1. 建立兩個普通使用者
+	_, user1Token := createAndLoginUser(t, ctx, "user1", "user1@example.com", "password123", domain.RoleUser)
+	user2, _ := createAndLoginUser(t, ctx, "user2", "user2@example.com", "password123", domain.RoleUser)
+
+	// 2. 作為普通使用者，嘗試獲取所有使用者
+	reqGetAll, _ := http.NewRequestWithContext(ctx, "GET", "/api/v1/users/", nil)
+	reqGetAll.Header.Set("Authorization", "Bearer "+user1Token)
+	wGetAll := httptest.NewRecorder()
+	testRouter.ServeHTTP(wGetAll, reqGetAll)
+
+	// 斷言 GetAllUsers 失敗
+	assert.Equal(t, http.StatusForbidden, wGetAll.Code)
+
+	// 3. 作為普通使用者，嘗試透過 ID 獲取另一個使用者
+	reqGetByID, _ := http.NewRequestWithContext(ctx, "GET", "/api/v1/users/"+user2.ID, nil)
+	reqGetByID.Header.Set("Authorization", "Bearer "+user1Token)
+	wGetByID := httptest.NewRecorder()
+	testRouter.ServeHTTP(wGetByID, reqGetByID)
+
+	// 斷言 GetUserByID 失敗
+	assert.Equal(t, http.StatusForbidden, wGetByID.Code)
 }
