@@ -30,6 +30,7 @@ type imageService struct {
 	visionClient  *vision.ImageAnnotatorClient
 	publicBucket  string
 	privateBucket string
+	cfg           *config.Config
 }
 
 func NewImageService(repo repository.ImageRepository, storageClient *storage.Client, visionClient *vision.ImageAnnotatorClient, cfg *config.Config) ImageService {
@@ -39,6 +40,7 @@ func NewImageService(repo repository.ImageRepository, storageClient *storage.Cli
 		visionClient:  visionClient,
 		publicBucket:  cfg.GCP.PublicBucket,
 		privateBucket: cfg.GCP.PrivateBucket,
+		cfg:           cfg,
 	}
 }
 
@@ -95,24 +97,25 @@ func (s *imageService) UploadImage(ctx context.Context, file multipart.File, hea
 		visionData.Violence = annotations.Violence.String()
 		visionData.Medical = annotations.Medical.String()
 		visionData.Spoof = annotations.Spoof.String()
-
-		// Simple auto-approval logic
-		if annotations.Adult == visionpb.Likelihood_VERY_UNLIKELY &&
-			annotations.Racy == visionpb.Likelihood_VERY_UNLIKELY &&
-			annotations.Violence == visionpb.Likelihood_VERY_UNLIKELY {
-			status = domain.ImageStatusApproved
-		} else if annotations.Adult >= visionpb.Likelihood_LIKELY ||
-			annotations.Violence >= visionpb.Likelihood_LIKELY {
-			status = domain.ImageStatusRejected
-		}
 	}
 
-	// 5. If Approved, move to Public Bucket
+	// 4. Determine Status
+	status = s.determineImageStatus(annotations)
+
+	// 5. If Approved, move to Public Bucket and generate Public URL
+	publicURL := ""
 	if status == domain.ImageStatusApproved {
 		if err := s.moveFile(ctx, s.privateBucket, filename, s.publicBucket, filename); err != nil {
 			logger.ErrorContext(ctx, "Failed to move approved image to public bucket", "error", err)
 			// Fallback to pending if move fails
 			status = domain.ImageStatusPending
+		} else {
+			// Generate ImageKit URL
+			// Format: https://ik.imagekit.io/your_id/path/to/file
+			if s.cfg.Image.ImageKitEndpoint != "" {
+				// Ensure endpoint doesn't end with slash and filename doesn't start with slash (it doesn't)
+				publicURL = fmt.Sprintf("%s/%s", s.cfg.Image.ImageKitEndpoint, filename)
+			}
 		}
 	}
 
@@ -121,7 +124,7 @@ func (s *imageService) UploadImage(ctx context.Context, file multipart.File, hea
 	image := &domain.Image{
 		UserID:     userObjID,
 		GCSPath:    filename,
-		PublicURL:  "", // TODO: Integrate ImageKit
+		PublicURL:  publicURL,
 		Status:     status,
 		VisionData: visionData,
 	}
@@ -131,6 +134,46 @@ func (s *imageService) UploadImage(ctx context.Context, file multipart.File, hea
 	}
 
 	return image, nil
+}
+
+func (s *imageService) determineImageStatus(annotations *visionpb.SafeSearchAnnotation) domain.ImageStatus {
+	if annotations == nil {
+		return domain.ImageStatusPending
+	}
+
+	// Helper to parse likelihood string to enum
+	parseLikelihood := func(s string) visionpb.Likelihood {
+		v, ok := visionpb.Likelihood_value[s]
+		if !ok {
+			return visionpb.Likelihood_UNKNOWN
+		}
+		return visionpb.Likelihood(v)
+	}
+
+	// Helper to check if any category exceeds reject threshold
+	isRejected := func() bool {
+		if s.cfg.Image.RejectAdult != "" && annotations.Adult >= parseLikelihood(s.cfg.Image.RejectAdult) {
+			return true
+		}
+		if s.cfg.Image.RejectSpoof != "" && annotations.Spoof >= parseLikelihood(s.cfg.Image.RejectSpoof) {
+			return true
+		}
+		if s.cfg.Image.RejectMedical != "" && annotations.Medical >= parseLikelihood(s.cfg.Image.RejectMedical) {
+			return true
+		}
+		if s.cfg.Image.RejectViolence != "" && annotations.Violence >= parseLikelihood(s.cfg.Image.RejectViolence) {
+			return true
+		}
+		if s.cfg.Image.RejectRacy != "" && annotations.Racy >= parseLikelihood(s.cfg.Image.RejectRacy) {
+			return true
+		}
+		return false
+	}
+
+	if isRejected() {
+		return domain.ImageStatusRejected
+	}
+	return domain.ImageStatusApproved
 }
 
 func (s *imageService) GetImage(ctx context.Context, id string) (*domain.Image, error) {

@@ -19,13 +19,13 @@
 *   [x] [P1] Users: 用戶基本資料查詢 (不含圖片上傳)。
 
 ### **Phase 2: 圖片系統與供給端 (Image System & Supply)**
-*   [P2] Image System (Core):
-    *   實作 GCS 上傳。
-    *   整合 Google Vision API 進行自動審核。
-    *   實作圖片狀態管理 (Pending/Approved/Rejected)。
-*   [P2] User Profile Update: 整合圖片系統，允許用戶上傳頭像。
-*   [P2] Hosts: 建立接待主資料 (含環境照片上傳)。
-*   [P2] Opportunities: 刊登工作機會 (含 GeoJSON 座標與照片)。
+*   [x] [P2] Image System (Core):
+    *   [x] 實作 GCS 上傳。
+    *   [x] 整合 Google Vision API 進行自動審核。
+    *   [x] 實作圖片狀態管理 (Pending/Approved/Rejected)。
+*   [x] [P2] User Profile Update: 整合圖片系統，允許用戶上傳頭像。
+*   [x] [P2] Hosts: 建立接待主資料 (含環境照片上傳)。
+*   [x] [P2] Opportunities: 刊登工作機會 (含 GeoJSON 座標與照片)。
 
 ### **Phase 3: 核心需求端 (Applications)**
 *   [P3] Search: 基礎列表查詢 (支援分頁與地理位置顯示)。
@@ -83,38 +83,27 @@
 ```
 
 ### 2.3. 系統分層與圖片流程
-
 ```mermaid
 graph TD
-    Client[用戶端 / ImageKit CDN]
+    Client[使用者上傳圖片] --> Router(Go Backend Router)
+    Router --> ImgHandler[Image Handler]
+    ImgHandler --> ImgService[Image Service]
+    ImgService --> |1. 上傳至 GCS| GCS[(Google Cloud Storage)]
+    ImgService --> |2. 呼叫 Vision AI| VisionAPI[Google Cloud Vision AI]
+    VisionAPI --> |3. 解析 SafeSearch| ImgService
+    ImgService --> |4. 判定狀態| DB[(MongoDB)]
 
-    subgraph "Go Backend"
-        Router[Gin Router]
-        ImgHandler[Image Handler]
-        ImgService[Image Service]
-        VisionService[Vision Analysis Service]
-    end
+    DB --> |Likelihood > POSSIBLE| Rejected[Status: Rejected]
+    DB --> |Likelihood = POSSIBLE| Pending[Status: Pending]
+    DB --> |Likelihood <= UNLIKELY| Approved[Status: Approved]
 
-    subgraph "GCP Services"
-        GCS[(Google Cloud Storage)]
-        VisionAPI[Vision AI]
-    end
+    ClientView[前端顯示] --> CheckStatus{檢查狀態}
+    CheckStatus --> |Approved| PublicView[公開顯示]
+    CheckStatus --> |Pending/Rejected| PrivateView[私人顯示]
 
-    subgraph "Database"
-        MongoDB[(MongoDB)]
-    end
-
-    Client -- 1. 上傳圖片 --> Router
-    Router --> ImgHandler
-    ImgHandler --> ImgService
-    ImgService -- 2. 儲存原始檔 --> GCS
-    GCS -.-> ImgService
-    ImgService -- 3. 呼叫審核 --> VisionService
-    VisionService -- 4. 分析內容 --> VisionAPI
-    VisionAPI -.-> VisionService
-    ImgService -- 5. 存入DB (Status: Pending/Approved) --> MongoDB
-    ImgService -.-> ImgHandler
-    ImgHandler -- 6. 回傳 Image ID & URL --> Client
+    PublicView --> |ImageKit CDN| GCS
+    PrivateView --> |Backend Proxy| ImgHandler
+    ImgHandler --> |Read Stream| GCS
 ```
 
 ---
@@ -122,10 +111,13 @@ graph TD
 ## 3. 圖片管理系統詳解 (Image System)
 
 ### 3.1. 核心邏輯
-*   **上傳**: 統一上傳至 GCS Bucket (Private/Protected)。
+*   **上傳**: 統一上傳至 GCS Bucket (Private Bucket)。
 *   **審核**: 上傳當下同步觸發 Google Vision SafeSearch Detection。
-*   **CDN**: 前端使用 ImageKit URL 存取 已審核通過 (Approved) 的圖片 (ImageKit 後台需設定 Origin 為 GCS)。
-*   **權限**: 若圖片狀態為 PENDING 或 REJECTED，前端無法透過 CDN 讀取，必須透過後端 API 驗證 Token 後轉發 (Proxy) 或簽署短效 URL。
+    *   **Rejected**: Likelihood > POSSIBLE (VIOLENCE, RACY, ADULT)。
+    *   **Pending**: Likelihood = POSSIBLE 或 UNKNOWN。
+    *   **Approved**: Likelihood <= UNLIKELY (自動移動至 Public Bucket)。
+*   **CDN (Public)**: 前端使用 ImageKit URL 存取 **Approved** 的圖片 (ImageKit Origin 指向 Public Bucket)。
+*   **Proxy (Private)**: 若圖片狀態為 **PENDING** 或 **REJECTED**，前端無法透過 CDN 讀取，必須透過後端 API (`/api/v1/images/private/:id`) 驗證 Token 後，由後端從 Private Bucket 讀取串流回傳。
 
 ### 3.2. Domain Model (`internal/domain/image.go`)
 

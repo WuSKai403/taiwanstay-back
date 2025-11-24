@@ -120,7 +120,7 @@ type OpportunityLocation struct {
 	City        string   `bson:"city" json:"city"`
 	District    string   `bson:"district,omitempty" json:"district,omitempty"`
 	Country     string   `bson:"country" json:"country"`
-	Coordinates *GeoJSON `bson:"coordinates,omitempty" json:"coordinates,omitempty"`
+	Coordinates *GeoJSON `bson:"coordinates" json:"coordinates" binding:"required"`
 }
 
 type ApplicationProcess struct {

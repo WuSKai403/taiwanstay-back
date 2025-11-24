@@ -72,8 +72,8 @@ type ContactInfo struct {
 }
 
 type GeoJSON struct {
-	Type        string    `bson:"type" json:"type"` // "Point"
-	Coordinates []float64 `bson:"coordinates" json:"coordinates"`
+	Type        string    `bson:"type" json:"type" binding:"required,eq=Point"`
+	Coordinates []float64 `bson:"coordinates" json:"coordinates" binding:"required,min=2,max=2"`
 }
 
 type HostLocation struct {
@@ -82,7 +82,7 @@ type HostLocation struct {
 	District          string   `bson:"district,omitempty" json:"district,omitempty"`
 	ZipCode           string   `bson:"zipCode,omitempty" json:"zipCode,omitempty"`
 	Country           string   `bson:"country" json:"country"`
-	Coordinates       *GeoJSON `bson:"coordinates,omitempty" json:"coordinates,omitempty"`
+	Coordinates       *GeoJSON `bson:"coordinates" json:"coordinates" binding:"required"`
 	ShowExactLocation bool     `bson:"showExactLocation" json:"showExactLocation"`
 }
 
