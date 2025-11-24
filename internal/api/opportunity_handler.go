@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/taiwanstay/taiwanstay-back/internal/domain"
+	"github.com/taiwanstay/taiwanstay-back/internal/repository"
 	"github.com/taiwanstay/taiwanstay-back/internal/service"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -92,4 +93,48 @@ func (h *OpportunityHandler) List(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, opps)
+}
+
+func (h *OpportunityHandler) Search(c *gin.Context) {
+	limitStr := c.DefaultQuery("limit", "10")
+	offsetStr := c.DefaultQuery("offset", "0")
+	limit, _ := strconv.ParseInt(limitStr, 10, 64)
+	offset, _ := strconv.ParseInt(offsetStr, 10, 64)
+
+	latStr := c.Query("lat")
+	lngStr := c.Query("lng")
+	distStr := c.Query("distance")
+	var lat, lng, dist float64
+	if latStr != "" && lngStr != "" {
+		lat, _ = strconv.ParseFloat(latStr, 64)
+		lng, _ = strconv.ParseFloat(lngStr, 64)
+	}
+	if distStr != "" {
+		dist, _ = strconv.ParseFloat(distStr, 64)
+	}
+
+	filter := repository.OpportunityFilter{
+		Query:     c.Query("q"),
+		Type:      c.Query("type"),
+		City:      c.Query("city"),
+		Country:   c.Query("country"),
+		StartDate: c.Query("startDate"),
+		EndDate:   c.Query("endDate"),
+		Lat:       lat,
+		Lng:       lng,
+		Distance:  dist,
+		Limit:     limit,
+		Offset:    offset,
+	}
+
+	opps, total, err := h.oppService.SearchOpportunities(c.Request.Context(), filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to search opportunities"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":  opps,
+		"total": total,
+	})
 }

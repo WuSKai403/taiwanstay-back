@@ -6,7 +6,7 @@ import (
 )
 
 // SetupRoutes 負責設定所有 API 路由
-func SetupRoutes(router *gin.Engine, userHandler *UserHandler, imageHandler *ImageHandler, hostHandler *HostHandler, oppHandler *OpportunityHandler, cfg *config.Config) {
+func SetupRoutes(router *gin.Engine, userHandler *UserHandler, imageHandler *ImageHandler, hostHandler *HostHandler, oppHandler *OpportunityHandler, appHandler *ApplicationHandler, cfg *config.Config) {
 	// 建立 API 版本分組
 	v1 := router.Group("/api/v1")
 	{
@@ -55,6 +55,7 @@ func SetupRoutes(router *gin.Engine, userHandler *UserHandler, imageHandler *Ima
 		opps := v1.Group("/opportunities")
 		{
 			opps.GET("", oppHandler.List)
+			opps.GET("/search", oppHandler.Search)
 			opps.GET("/:id", oppHandler.GetByID)
 
 			// 需要認證
@@ -63,6 +64,18 @@ func SetupRoutes(router *gin.Engine, userHandler *UserHandler, imageHandler *Ima
 			{
 				authOpps.POST("", oppHandler.Create)
 			}
+
+		}
+
+		// 申請 (Application) 相關路由
+		apps := v1.Group("/applications")
+		apps.Use(AuthMiddleware(cfg))
+		{
+			apps.POST("", appHandler.Create)
+			apps.GET("", appHandler.List)
+			apps.GET("/:id", appHandler.GetByID)
+			apps.PUT("/:id", appHandler.UpdateStatus)
+			apps.DELETE("/:id", appHandler.Delete)
 		}
 
 		// ... 其他資源的路由設定

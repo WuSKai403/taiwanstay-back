@@ -168,9 +168,28 @@ type Image struct {
 
 ---
 
-## 4. API 遷移與 DTO 規範
+## 4. 核心業務邏輯 (Core Business Logic)
 
-### 4.1. 資源對應表 (依開發順序)
+### 4.1. 機會時段設計 (Opportunity Time Slots)
+
+為平衡 Host 維護成本與 User 申請彈性，MVP 採用 **「時段範圍 (Time Range)」** 策略，而非每日日曆管理。
+
+*   **Host 設定**:
+    *   設定「開放時段 (Time Slots)」，例如：`2023-07-01` 至 `2023-09-30`。
+    *   可設定該時段的 `Capacity` (預設人數)。
+    *   無需每日開關，僅需確保大範圍時間有空。
+*   **User 搜尋**:
+    *   搜尋時輸入預計月份或日期範圍。
+    *   系統篩選出「時段有重疊 (Overlap)」且「狀態為 OPEN」的機會。
+*   **Application (申請)**:
+    *   User 申請時需明確指定 `StartDate` 與 `EndDate`。
+    *   Host 審核時，確認該特定日期區間是否可行，再行接受 (Accept)。
+
+---
+
+## 5. API 遷移與 DTO 規範
+
+### 5.1. 資源對應表 (依開發順序)
 
 | 優先級 | 資源 (Domain) | 路由前綴 | 關鍵特性 (MongoDB / GCP) |
 | :--- | :--- | :--- | :--- |
@@ -181,7 +200,7 @@ type Image struct {
 | **P2** | **Opportunities** | `/api/v1/opportunities` | **2dsphere Index**, Text Index, 引用 Image IDs |
 | **P3** | **Applications** | `/api/v1/applications` | Compound Index (`user_id` + `opp_id`) |
 
-### 4.2. DTO 與 Domain 分離原則
+### 5.2. DTO 與 Domain 分離原則
 
 嚴格禁止將 `domain.Image` 或 `domain.User` 等資料庫模型直接綁定到 Gin Context。
 
@@ -198,7 +217,7 @@ type Image struct {
 
 ---
 
-## 5. 開發規範重點摘要
+## 6. 開發規範重點摘要
 
 *   **日誌 (Slog)**: 使用 `slog.InfoContext` 或 `slog.ErrorContext`，並附帶 Request ID。
 *   **更新策略**: 使用 `map[string]interface{}` 或 `bson.M` 動態組建 MongoDB `$set` 更新指令，防止零值覆蓋。
@@ -210,7 +229,7 @@ type Image struct {
 
 ---
 
-## 6. AI 協作指令 (Prompt)
+## 7. AI 協作指令 (Prompt)
 
 當你 (AI) 開始實作時，請遵循：
 1.  **MVP 優先**: 依照 Phase 0 -> Phase 4 的順序實作。

@@ -14,6 +14,7 @@ type OpportunityService interface {
 	GetOpportunityByID(ctx context.Context, id string) (*domain.Opportunity, error)
 	ListOpportunities(ctx context.Context, filter bson.M, limit, offset int64) ([]*domain.Opportunity, error)
 	UpdateOpportunity(ctx context.Context, id string, opp *domain.Opportunity) error
+	SearchOpportunities(ctx context.Context, filter repository.OpportunityFilter) ([]*domain.Opportunity, int64, error)
 }
 
 type opportunityService struct {
@@ -57,4 +58,8 @@ func (s *opportunityService) ListOpportunities(ctx context.Context, filter bson.
 
 func (s *opportunityService) UpdateOpportunity(ctx context.Context, id string, opp *domain.Opportunity) error {
 	return s.repo.Update(ctx, id, opp)
+}
+
+func (s *opportunityService) SearchOpportunities(ctx context.Context, filter repository.OpportunityFilter) ([]*domain.Opportunity, int64, error) {
+	return s.repo.Search(ctx, filter)
 }

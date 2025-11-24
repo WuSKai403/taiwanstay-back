@@ -75,6 +75,11 @@ func main() {
 	oppService := service.NewOpportunityService(oppRepo)
 	oppHandler := api.NewOpportunityHandler(oppService, hostService)
 
+	appCollection := db.Collection("applications")
+	appRepo := repository.NewApplicationRepository(appCollection)
+	appService := service.NewApplicationService(appRepo, oppRepo)
+	appHandler := api.NewApplicationHandler(appService)
+
 	// 6. Setup Server
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
@@ -82,7 +87,7 @@ func main() {
 	router := gin.Default()
 
 	// Setup Routes
-	api.SetupRoutes(router, userHandler, imageHandler, hostHandler, oppHandler, cfg)
+	api.SetupRoutes(router, userHandler, imageHandler, hostHandler, oppHandler, appHandler, cfg)
 
 	// 7. Run Server
 	addr := ":" + cfg.Server.Port
