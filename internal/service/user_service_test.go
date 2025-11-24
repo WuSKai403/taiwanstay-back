@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/taiwanstay/taiwanstay-back/internal/domain"
+	"github.com/taiwanstay/taiwanstay-back/pkg/config"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
@@ -71,7 +72,8 @@ func TestLoginUser(t *testing.T) {
 		mockRepo.On("GetByEmail", mock.Anything, testUser.Email).Return(testUser, nil)
 
 		// 建立 service
-		userService := NewUserService(mockRepo)
+		cfg := &config.Config{Server: config.ServerConfig{JWTSecret: "test-secret"}}
+		userService := NewUserService(mockRepo, cfg)
 
 		// 執行登入
 		user, token, err := userService.LoginUser(context.Background(), testUser.Email, password)
@@ -91,7 +93,8 @@ func TestLoginUser(t *testing.T) {
 		mockRepo.On("GetByEmail", mock.Anything, testUser.Email).Return(testUser, nil)
 
 		// 建立 service
-		userService := NewUserService(mockRepo)
+		cfg := &config.Config{Server: config.ServerConfig{JWTSecret: "test-secret"}}
+		userService := NewUserService(mockRepo, cfg)
 
 		// 執行登入
 		_, _, err := userService.LoginUser(context.Background(), testUser.Email, "wrongpassword")
@@ -108,7 +111,8 @@ func TestLoginUser(t *testing.T) {
 		mockRepo.On("GetByEmail", mock.Anything, "notfound@example.com").Return(nil, mongo.ErrNoDocuments)
 
 		// 建立 service
-		userService := NewUserService(mockRepo)
+		cfg := &config.Config{Server: config.ServerConfig{JWTSecret: "test-secret"}}
+		userService := NewUserService(mockRepo, cfg)
 
 		// 執行登入
 		_, _, err := userService.LoginUser(context.Background(), "notfound@example.com", "password123")
@@ -126,7 +130,8 @@ func TestRegisterUser(t *testing.T) {
 		mockRepo.On("GetByEmail", mock.Anything, "new@example.com").Return(nil, mongo.ErrNoDocuments)
 		mockRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.User")).Return("new-user-id", nil)
 
-		userService := NewUserService(mockRepo)
+		cfg := &config.Config{Server: config.ServerConfig{JWTSecret: "test-secret"}}
+		userService := NewUserService(mockRepo, cfg)
 		user, err := userService.RegisterUser(context.Background(), "newuser", "new@example.com", "password123")
 
 		assert.NoError(t, err)
@@ -140,7 +145,8 @@ func TestRegisterUser(t *testing.T) {
 		mockRepo := new(mockUserRepository)
 		mockRepo.On("GetByEmail", mock.Anything, "exists@example.com").Return(existingUser, nil)
 
-		userService := NewUserService(mockRepo)
+		cfg := &config.Config{Server: config.ServerConfig{JWTSecret: "test-secret"}}
+		userService := NewUserService(mockRepo, cfg)
 		_, err := userService.RegisterUser(context.Background(), "anotheruser", "exists@example.com", "password123")
 
 		assert.Error(t, err)

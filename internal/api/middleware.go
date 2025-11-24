@@ -6,15 +6,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-)
-
-const (
-	// TODO: Move to config
-	jwtSecret = "your-super-secret-key"
+	"github.com/taiwanstay/taiwanstay-back/internal/domain"
+	"github.com/taiwanstay/taiwanstay-back/pkg/config"
 )
 
 // AuthMiddleware 是一個 Gin 中介軟體，用於驗證 JWT token
-func AuthMiddleware() gin.HandlerFunc {
+func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -35,7 +32,7 @@ func AuthMiddleware() gin.HandlerFunc {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, jwt.ErrSignatureInvalid
 			}
-			return []byte(jwtSecret), nil
+			return []byte(cfg.Server.JWTSecret), nil
 		})
 
 		if err != nil {
@@ -71,7 +68,7 @@ func AdminAuthMiddleware() gin.HandlerFunc {
 		}
 
 		role, ok := mapClaims["role"].(string)
-		if !ok || role != "admin" {
+		if !ok || domain.UserRole(role) != domain.RoleAdmin {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Access denied: administrator privileges required"})
 			return
 		}

@@ -8,6 +8,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/taiwanstay/taiwanstay-back/internal/domain"
 	"github.com/taiwanstay/taiwanstay-back/internal/repository"
+	"github.com/taiwanstay/taiwanstay-back/pkg/config"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
@@ -37,11 +38,11 @@ type userService struct {
 }
 
 // NewUserService 建立一個新的 UserService 實例
-func NewUserService(repo repository.UserRepository) UserService {
+func NewUserService(repo repository.UserRepository, cfg *config.Config) UserService {
 	return &userService{
 		userRepo:      repo,
-		jwtSecret:     "your-super-secret-key", // TODO: Move to config
-		tokenDuration: time.Hour * 24,          // Token a 24 horas
+		jwtSecret:     cfg.Server.JWTSecret,
+		tokenDuration: time.Hour * 24, // Token a 24 horas
 	}
 }
 

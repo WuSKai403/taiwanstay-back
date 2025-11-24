@@ -57,8 +57,23 @@ func main() {
 	userCollection := db.Collection("users")
 
 	userRepo := repository.NewUserRepository(userCollection)
-	userService := service.NewUserService(userRepo)
+	userService := service.NewUserService(userRepo, cfg)
 	userHandler := api.NewUserHandler(userService)
+
+	imageCollection := db.Collection("images")
+	imageRepo := repository.NewImageRepository(imageCollection)
+	imageService := service.NewImageService(imageRepo, storageClient, visionClient, cfg)
+	imageHandler := api.NewImageHandler(imageService)
+
+	hostCollection := db.Collection("hosts")
+	hostRepo := repository.NewHostRepository(hostCollection)
+	hostService := service.NewHostService(hostRepo)
+	hostHandler := api.NewHostHandler(hostService)
+
+	oppCollection := db.Collection("opportunities")
+	oppRepo := repository.NewOpportunityRepository(oppCollection)
+	oppService := service.NewOpportunityService(oppRepo)
+	oppHandler := api.NewOpportunityHandler(oppService, hostService)
 
 	// 6. Setup Server
 	if cfg.Server.Mode == "release" {
@@ -67,7 +82,7 @@ func main() {
 	router := gin.Default()
 
 	// Setup Routes
-	api.SetupRoutes(router, userHandler)
+	api.SetupRoutes(router, userHandler, imageHandler, hostHandler, oppHandler, cfg)
 
 	// 7. Run Server
 	addr := ":" + cfg.Server.Port

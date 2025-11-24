@@ -15,8 +15,9 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Port string `mapstructure:"port"`
-	Mode string `mapstructure:"mode"` // debug, release
+	Port      string `mapstructure:"port"`
+	Mode      string `mapstructure:"mode"` // debug, release
+	JWTSecret string `mapstructure:"jwt_secret"`
 }
 
 type DatabaseConfig struct {
@@ -26,7 +27,8 @@ type DatabaseConfig struct {
 
 type GCPConfig struct {
 	ProjectID           string `mapstructure:"project_id"`
-	StorageBucket       string `mapstructure:"storage_bucket"`
+	PublicBucket        string `mapstructure:"public_bucket"`
+	PrivateBucket       string `mapstructure:"private_bucket"`
 	CredentialsJSONPath string `mapstructure:"credentials_json_path"`
 }
 
@@ -49,10 +51,12 @@ func LoadConfig() (*Config, error) {
 	// Example: SERVER_PORT maps to Server.Port
 	_ = viper.BindEnv("server.port", "SERVER_PORT")
 	_ = viper.BindEnv("server.mode", "GIN_MODE")
+	_ = viper.BindEnv("server.jwt_secret", "JWT_SECRET")
 	_ = viper.BindEnv("database.uri", "MONGODB_URI")
 	_ = viper.BindEnv("database.database", "MONGODB_DATABASE")
 	_ = viper.BindEnv("gcp.project_id", "GCP_PROJECT_ID")
-	_ = viper.BindEnv("gcp.storage_bucket", "GCP_STORAGE_BUCKET")
+	_ = viper.BindEnv("gcp.public_bucket", "GCP_STORAGE_PUBLIC_BUCKET")
+	_ = viper.BindEnv("gcp.private_bucket", "GCP_STORAGE_PRIVATE_BUCKET")
 	_ = viper.BindEnv("gcp.credentials_json_path", "GOOGLE_APPLICATION_CREDENTIALS")
 
 	var config Config

@@ -24,17 +24,27 @@ import (
 	"github.com/taiwanstay/taiwanstay-back/internal/domain"
 	"github.com/taiwanstay/taiwanstay-back/internal/repository"
 	"github.com/taiwanstay/taiwanstay-back/internal/service"
+	"github.com/taiwanstay/taiwanstay-back/pkg/config"
 )
 
 var (
 	testCollection *mongo.Collection
 	testRouter     *gin.Engine
+	testConfig     *config.Config
 )
 
 // TestMain 是測試的主進入點，用於設定和清理測試環境
 func TestMain(m *testing.M) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
+
+	// Setup test config
+	testConfig = &config.Config{
+		Server: config.ServerConfig{
+			JWTSecret: "test-secret",
+			Mode:      "test",
+		},
+	}
 
 	// 啟動 MongoDB 容器
 	mongodbContainer, err := mongodb.Run(ctx, "mongo:6")
@@ -74,11 +84,12 @@ func setupTestRouter(collection *mongo.Collection) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 
 	userRepo := repository.NewUserRepository(collection)
-	userService := service.NewUserService(userRepo)
+	userService := service.NewUserService(userRepo, testConfig)
 	userHandler := NewUserHandler(userService)
 
 	router := gin.Default()
-	SetupRoutes(router, userHandler)
+	// Pass nil for ImageHandler, HostHandler, OppHandler as we are not testing them here yet
+	SetupRoutes(router, userHandler, nil, nil, nil, testConfig)
 	return router
 }
 
@@ -271,7 +282,7 @@ func TestLogin_UserNotFound(t *testing.T) {
 
 // generateTestToken 根據使用者資訊生成用於測試的 JWT
 func generateTestToken(t *testing.T, user *domain.User) string {
-	jwtSecret := "your-super-secret-key" // 與 middleware 中保持一致
+	jwtSecret := testConfig.Server.JWTSecret // 與 middleware 中保持一致
 	tokenDuration := time.Hour * 24
 
 	claims := jwt.MapClaims{

@@ -9,14 +9,14 @@
 為確保核心功能快速上線，開發將嚴格依照以下優先順序進行。「組織 (Organization)」功能暫停。
 
 ### **Phase 0: 基礎建設 (Foundation)**
-*   [P0] 專案初始化 (Go Modules, Viper Config, .env 載入)。
-*   [P0] 資料庫連線 (MongoDB) 與全域錯誤處理機制。
-*   [P0] Log 系統建置 (log/slog)。
-*   [P0] GCP Client 初始化: 設定 GCS Storage Client 與 Vision API Client。
+*   [x] [P0] 專案初始化 (Go Modules, Viper Config, .env 載入)。
+*   [x] [P0] 資料庫連線 (MongoDB) 與全域錯誤處理機制。
+*   [x] [P0] Log 系統建置 (log/slog)。
+*   [x] [P0] GCP Client 初始化: 設定 GCS Storage Client 與 Vision API Client。
 
 ### **Phase 1: 用戶與認證 (Identity)**
-*   [P1] Auth: 註冊、登入 (JWT 核發)、密碼加密。
-*   [P1] Users: 用戶基本資料查詢 (不含圖片上傳)。
+*   [x] [P1] Auth: 註冊、登入 (JWT 核發)、密碼加密。
+*   [x] [P1] Users: 用戶基本資料查詢 (不含圖片上傳)。
 
 ### **Phase 2: 圖片系統與供給端 (Image System & Supply)**
 *   [P2] Image System (Core):
