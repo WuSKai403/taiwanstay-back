@@ -9,6 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // UserRepository 定義了與使用者資料庫操作相關的介面
@@ -18,6 +19,9 @@ type UserRepository interface {
 	GetAll(ctx context.Context) ([]*domain.User, error)
 	GetByID(ctx context.Context, id string) (*domain.User, error)
 	Update(ctx context.Context, id string, payload bson.M) error
+	Count(ctx context.Context) (int64, error)
+	List(ctx context.Context, filter bson.M, limit, offset int64) ([]*domain.User, int64, error)
+	UpdateStatus(ctx context.Context, id string, status domain.UserStatus) error
 }
 
 // mongoUserRepository 是 UserRepository 的 MongoDB 實作
@@ -105,6 +109,33 @@ func (r *mongoUserRepository) GetAll(ctx context.Context) ([]*domain.User, error
 	return users, nil
 }
 
+// Count 計算使用者總數
+func (r *mongoUserRepository) Count(ctx context.Context) (int64, error) {
+	return r.collection.CountDocuments(ctx, bson.M{})
+}
+
+// List 根據條件列出使用者
+func (r *mongoUserRepository) List(ctx context.Context, filter bson.M, limit, offset int64) ([]*domain.User, int64, error) {
+	total, err := r.collection.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	opts := options.Find().SetLimit(limit).SetSkip(offset).SetSort(bson.D{{Key: "createdAt", Value: -1}})
+	cursor, err := r.collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+
+	var users []*domain.User
+	if err := cursor.All(ctx, &users); err != nil {
+		return nil, 0, err
+	}
+
+	return users, total, nil
+}
+
 // GetByID 透過 ID 尋找使用者
 func (r *mongoUserRepository) GetByID(ctx context.Context, id string) (*domain.User, error) {
 	var user domain.User
@@ -121,4 +152,26 @@ func (r *mongoUserRepository) GetByID(ctx context.Context, id string) (*domain.U
 		return nil, err
 	}
 	return &user, nil
+}
+
+// UpdateStatus 更新使用者狀態
+func (r *mongoUserRepository) UpdateStatus(ctx context.Context, id string, status domain.UserStatus) error {
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return errors.New("invalid user id format")
+	}
+
+	filter := bson.M{"_id": objID}
+	update := bson.M{"$set": bson.M{"status": status, "updatedAt": time.Now()}}
+
+	res, err := r.collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return err
+	}
+
+	if res.MatchedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+
+	return nil
 }

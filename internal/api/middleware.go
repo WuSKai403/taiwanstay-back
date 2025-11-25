@@ -4,11 +4,42 @@ import (
 	"net/http"
 	"strings"
 
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/taiwanstay/taiwanstay-back/internal/domain"
 	"github.com/taiwanstay/taiwanstay-back/pkg/config"
+	"github.com/taiwanstay/taiwanstay-back/pkg/logger"
 )
+
+// Logger 是一個 Gin 中介軟體，用於記錄 HTTP 請求
+func Logger() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		path := c.Request.URL.Path
+		query := c.Request.URL.RawQuery
+		method := c.Request.Method
+		requestID := uuid.New().String()
+		c.Set("RequestID", requestID)
+		c.Header("X-Request-ID", requestID)
+
+		c.Next()
+
+		latency := time.Since(start)
+		status := c.Writer.Status()
+
+		logger.Info("HTTP Request",
+			"method", method,
+			"path", path,
+			"query", query,
+			"status", status,
+			"latency", latency,
+			"request_id", requestID,
+		)
+	}
+}
 
 // AuthMiddleware 是一個 Gin 中介軟體，用於驗證 JWT token
 func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {

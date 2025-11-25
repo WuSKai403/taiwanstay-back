@@ -13,6 +13,7 @@ type Config struct {
 	Database DatabaseConfig
 	GCP      GCPConfig
 	Image    ImageConfig
+	Email    EmailConfig
 }
 
 type ServerConfig struct {
@@ -44,6 +45,13 @@ type ImageConfig struct {
 	RejectRacy     string `mapstructure:"reject_racy"`
 }
 
+type EmailConfig struct {
+	BrevoAPIKey      string `mapstructure:"brevo_api_key"`
+	BrevoSenderEmail string `mapstructure:"brevo_sender_email"`
+	BrevoSenderName  string `mapstructure:"brevo_sender_name"`
+	MailerLiteAPIKey string `mapstructure:"mailerlite_api_key"`
+}
+
 func LoadConfig() (*Config, error) {
 	// Load .env file if it exists
 	if err := godotenv.Load(); err != nil {
@@ -68,6 +76,12 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault("image.reject_medical", "LIKELY")
 	viper.SetDefault("image.reject_violence", "LIKELY")
 	viper.SetDefault("image.reject_racy", "LIKELY")
+
+	// Email Config Defaults
+	viper.SetDefault("email.brevo_api_key", "")
+	viper.SetDefault("email.brevo_sender_email", "")
+	viper.SetDefault("email.brevo_sender_name", "")
+	viper.SetDefault("email.mailerlite_api_key", "")
 
 	// Bind environment variables
 	// Example: SERVER_PORT maps to Server.Port

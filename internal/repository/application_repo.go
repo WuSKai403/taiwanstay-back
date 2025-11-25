@@ -17,6 +17,7 @@ type ApplicationRepository interface {
 	List(ctx context.Context, filter bson.M, limit, offset int64) ([]*domain.Application, int64, error)
 	Update(ctx context.Context, id string, app *domain.Application) error
 	Delete(ctx context.Context, id string) error
+	CountByDate(ctx context.Context, date time.Time) (int64, error)
 }
 
 type mongoApplicationRepository struct {
@@ -105,5 +106,19 @@ func (r *mongoApplicationRepository) Delete(ctx context.Context, id string) erro
 		return err
 	}
 	_, err = r.collection.DeleteOne(ctx, bson.M{"_id": objID})
+	_, err = r.collection.DeleteOne(ctx, bson.M{"_id": objID})
 	return err
+}
+
+func (r *mongoApplicationRepository) CountByDate(ctx context.Context, date time.Time) (int64, error) {
+	startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
+	endOfDay := startOfDay.Add(24 * time.Hour)
+
+	filter := bson.M{
+		"createdAt": bson.M{
+			"$gte": startOfDay,
+			"$lt":  endOfDay,
+		},
+	}
+	return r.collection.CountDocuments(ctx, filter)
 }

@@ -6,6 +6,11 @@ GUEST_EMAIL="guest_$(date +%s)@example.com"
 HOST_EMAIL="host_$(date +%s)@example.com"
 PASSWORD="password123"
 
+# Helper function to parse JSON using python3
+json_val() {
+    python3 -c "import sys, json; print(json.load(sys.stdin)$1)"
+}
+
 echo "=== Starting Verification Flow ==="
 
 # 1. Register Guest
@@ -18,9 +23,9 @@ curl -s -X POST "$API_URL/auth/register" \
 echo "   Logging in Guest..."
 GUEST_TOKEN=$(curl -s -X POST "$API_URL/auth/login" \
   -H "Content-Type: application/json" \
-  -d "{\"loginType\":\"password\",\"email\":\"$GUEST_EMAIL\",\"password\":\"$PASSWORD\"}" | jq -r '.token')
+  -d "{\"loginType\":\"password\",\"email\":\"$GUEST_EMAIL\",\"password\":\"$PASSWORD\"}" | python3 -c "import sys, json; print(json.load(sys.stdin)['token'])")
 
-if [ "$GUEST_TOKEN" == "null" ]; then
+if [ "$GUEST_TOKEN" == "" ]; then
     echo "Failed to login guest"
     exit 1
 fi
@@ -36,9 +41,9 @@ curl -s -X POST "$API_URL/auth/register" \
 echo "   Logging in Host..."
 HOST_TOKEN=$(curl -s -X POST "$API_URL/auth/login" \
   -H "Content-Type: application/json" \
-  -d "{\"loginType\":\"password\",\"email\":\"$HOST_EMAIL\",\"password\":\"$PASSWORD\"}" | jq -r '.token')
+  -d "{\"loginType\":\"password\",\"email\":\"$HOST_EMAIL\",\"password\":\"$PASSWORD\"}" | python3 -c "import sys, json; print(json.load(sys.stdin)['token'])")
 
-if [ "$HOST_TOKEN" == "null" ]; then
+if [ "$HOST_TOKEN" == "" ]; then
     echo "Failed to login host"
     exit 1
 fi
@@ -69,9 +74,9 @@ OPP_ID=$(curl -s -X POST "$API_URL/opportunities" \
     "timeSlots": [
         {"startDate": "2023-07-01", "endDate": "2023-07-31", "status": "OPEN", "defaultCapacity": 2}
     ]
-  }' | jq -r '.id')
+  }' | python3 -c "import sys, json; print(json.load(sys.stdin)['id'])")
 
-if [ "$OPP_ID" == "null" ]; then
+if [ "$OPP_ID" == "" ]; then
     echo "Failed to create opportunity"
     exit 1
 fi
@@ -85,7 +90,7 @@ SEARCH_RESULT=$(curl -s -G "$API_URL/opportunities/search" \
     --data-urlencode "startDate=2023-07-05" \
     --data-urlencode "endDate=2023-07-10")
 
-FOUND_ID=$(echo $SEARCH_RESULT | jq -r '.data[0].id')
+FOUND_ID=$(echo $SEARCH_RESULT | python3 -c "import sys, json; print(json.load(sys.stdin)['data'][0]['id'])")
 if [ "$FOUND_ID" != "$OPP_ID" ]; then
     echo "Search failed: Expected $OPP_ID, got $FOUND_ID"
     exit 1
@@ -104,9 +109,9 @@ APP_ID=$(curl -s -X POST "$API_URL/applications" \
         \"startDate\": \"2023-07-05\",
         \"endDate\": \"2023-07-10\"
     }
-  }" | jq -r '.id')
+  }" | python3 -c "import sys, json; print(json.load(sys.stdin)['id'])")
 
-if [ "$APP_ID" == "null" ]; then
+if [ "$APP_ID" == "" ]; then
     echo "Failed to apply"
     exit 1
 fi
@@ -115,11 +120,14 @@ echo "   Application Created: $APP_ID"
 # 6. Host Reviews Application
 echo "6. Host Reviewing Application..."
 # List Applications
+# Need Host ID first
+HOST_ID=$(curl -s -X GET "$API_URL/hosts/me" -H "Authorization: Bearer $HOST_TOKEN" | python3 -c "import sys, json; print(json.load(sys.stdin)['id'])")
+
 LIST_RESULT=$(curl -s -G "$API_URL/applications" \
     -H "Authorization: Bearer $HOST_TOKEN" \
-    --data-urlencode "hostId=$(curl -s -X GET "$API_URL/hosts/me" -H "Authorization: Bearer $HOST_TOKEN" | jq -r '.id')")
+    --data-urlencode "hostId=$HOST_ID")
 
-FOUND_APP_ID=$(echo $LIST_RESULT | jq -r '.data[0].id')
+FOUND_APP_ID=$(echo $LIST_RESULT | python3 -c "import sys, json; print(json.load(sys.stdin)['data'][0]['id'])")
 if [ "$FOUND_APP_ID" != "$APP_ID" ]; then
     echo "List failed: Expected $APP_ID, got $FOUND_APP_ID"
     exit 1
@@ -140,11 +148,26 @@ fi
 # 7. Verify Status
 echo "7. Verifying Status..."
 FINAL_STATUS=$(curl -s -X GET "$API_URL/applications/$APP_ID" \
-  -H "Authorization: Bearer $GUEST_TOKEN" | jq -r '.status')
+  -H "Authorization: Bearer $GUEST_TOKEN" | python3 -c "import sys, json; print(json.load(sys.stdin)['status'])")
 
 if [ "$FINAL_STATUS" == "ACCEPTED" ]; then
     echo "=== SUCCESS: Full Flow Verified! ==="
 else
     echo "=== FAILED: Status is $FINAL_STATUS ==="
     exit 1
+fi
+
+# 8. Verify Notifications
+echo "8. Verifying Notifications..."
+# Guest should have a notification about status change
+NOTIFS=$(curl -s -X GET "$API_URL/users/me/notifications" \
+  -H "Authorization: Bearer $GUEST_TOKEN")
+
+NOTIF_COUNT=$(echo $NOTIFS | python3 -c "import sys, json; print(json.load(sys.stdin)['total'])")
+if [ "$NOTIF_COUNT" -gt 0 ]; then
+    echo "   Guest has $NOTIF_COUNT notifications."
+    TITLE=$(echo $NOTIFS | python3 -c "import sys, json; print(json.load(sys.stdin)['data'][0]['title'])")
+    echo "   Latest Notification: $TITLE"
+else
+    echo "   WARNING: Guest has no notifications!"
 fi

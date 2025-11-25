@@ -18,6 +18,13 @@ const (
 	PrivacyPrivate    PrivacyLevel = "PRIVATE"
 )
 
+type UserStatus string
+
+const (
+	UserStatusActive    UserStatus = "ACTIVE"
+	UserStatusSuspended UserStatus = "SUSPENDED"
+)
+
 // User 定義了與前端 User.ts 對應的完整使用者模型
 type User struct {
 	ID              string          `json:"id" bson:"_id,omitempty"`
@@ -27,6 +34,7 @@ type User struct {
 	EmailVerified   *time.Time      `json:"emailVerified,omitempty" bson:"emailVerified,omitempty"`
 	Password        string          `json:"-" bson:"password,omitempty"`
 	Role            UserRole        `json:"role" bson:"role"`
+	Status          UserStatus      `json:"status" bson:"status"`
 	Profile         Profile         `json:"profile" bson:"profile"`
 	HostID          string          `json:"hostId,omitempty" bson:"hostId,omitempty"`
 	OrganizationID  string          `json:"organizationId,omitempty" bson:"organizationId,omitempty"`

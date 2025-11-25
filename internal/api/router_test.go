@@ -89,7 +89,7 @@ func setupTestRouter(collection *mongo.Collection) *gin.Engine {
 
 	router := gin.Default()
 	// Pass nil for ImageHandler, HostHandler, OppHandler, AppHandler as we are not testing them here yet
-	SetupRoutes(router, userHandler, nil, nil, nil, nil, testConfig)
+	SetupRoutes(router, userHandler, nil, nil, nil, nil, nil, nil, testConfig)
 	return router
 }
 

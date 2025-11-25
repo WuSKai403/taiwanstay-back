@@ -10,6 +10,7 @@ import (
 	"github.com/taiwanstay/taiwanstay-back/internal/service"
 	"github.com/taiwanstay/taiwanstay-back/pkg/config"
 	"github.com/taiwanstay/taiwanstay-back/pkg/database"
+	"github.com/taiwanstay/taiwanstay-back/pkg/email"
 	"github.com/taiwanstay/taiwanstay-back/pkg/gcp"
 	"github.com/taiwanstay/taiwanstay-back/pkg/logger"
 )
@@ -54,31 +55,39 @@ func main() {
 
 	// 5. Dependency Injection
 	db := mongoClient.Database(cfg.Database.Database)
-	userCollection := db.Collection("users")
+	// Email Sender
+	primarySender := email.NewBrevoSender(cfg)
+	secondarySender := email.NewMailerLiteSender(cfg)
+	emailSender := email.NewFallbackSender(primarySender, secondarySender)
 
-	userRepo := repository.NewUserRepository(userCollection)
+	// Repositories
+	userRepo := repository.NewUserRepository(db.Collection("users"))
+	hostRepo := repository.NewHostRepository(db.Collection("hosts"))
+	oppRepo := repository.NewOpportunityRepository(db.Collection("opportunities"))
+	appRepo := repository.NewApplicationRepository(db.Collection("applications"))
+	notifRepo := repository.NewNotificationRepository(db.Collection("notifications"))
+
+	// Services
 	userService := service.NewUserService(userRepo, cfg)
-	userHandler := api.NewUserHandler(userService)
 
 	imageCollection := db.Collection("images")
 	imageRepo := repository.NewImageRepository(imageCollection)
 	imageService := service.NewImageService(imageRepo, storageClient, visionClient, cfg)
-	imageHandler := api.NewImageHandler(imageService)
 
-	hostCollection := db.Collection("hosts")
-	hostRepo := repository.NewHostRepository(hostCollection)
 	hostService := service.NewHostService(hostRepo)
-	hostHandler := api.NewHostHandler(hostService)
-
-	oppCollection := db.Collection("opportunities")
-	oppRepo := repository.NewOpportunityRepository(oppCollection)
 	oppService := service.NewOpportunityService(oppRepo)
-	oppHandler := api.NewOpportunityHandler(oppService, hostService)
+	notifService := service.NewNotificationService(notifRepo, userRepo, emailSender)
+	appService := service.NewApplicationService(appRepo, oppRepo, notifService)
+	adminService := service.NewAdminService(userRepo, imageRepo, appRepo, imageService)
 
-	appCollection := db.Collection("applications")
-	appRepo := repository.NewApplicationRepository(appCollection)
-	appService := service.NewApplicationService(appRepo, oppRepo)
+	// Handlers
+	userHandler := api.NewUserHandler(userService)
+	imageHandler := api.NewImageHandler(imageService)
+	hostHandler := api.NewHostHandler(hostService)
+	oppHandler := api.NewOpportunityHandler(oppService, hostService)
 	appHandler := api.NewApplicationHandler(appService)
+	notifHandler := api.NewNotificationHandler(notifService)
+	adminHandler := api.NewAdminHandler(adminService)
 
 	// 6. Setup Server
 	if cfg.Server.Mode == "release" {
@@ -87,7 +96,7 @@ func main() {
 	router := gin.Default()
 
 	// Setup Routes
-	api.SetupRoutes(router, userHandler, imageHandler, hostHandler, oppHandler, appHandler, cfg)
+	api.SetupRoutes(router, userHandler, imageHandler, hostHandler, oppHandler, appHandler, notifHandler, adminHandler, cfg)
 
 	// 7. Run Server
 	addr := ":" + cfg.Server.Port

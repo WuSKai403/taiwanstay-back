@@ -6,7 +6,11 @@ import (
 )
 
 // SetupRoutes 負責設定所有 API 路由
-func SetupRoutes(router *gin.Engine, userHandler *UserHandler, imageHandler *ImageHandler, hostHandler *HostHandler, oppHandler *OpportunityHandler, appHandler *ApplicationHandler, cfg *config.Config) {
+func SetupRoutes(router *gin.Engine, userHandler *UserHandler, imageHandler *ImageHandler, hostHandler *HostHandler, oppHandler *OpportunityHandler, appHandler *ApplicationHandler, notifHandler *NotificationHandler, adminHandler *AdminHandler, cfg *config.Config) {
+	// Global Middleware
+	router.Use(gin.Recovery())
+	router.Use(Logger())
+
 	// 建立 API 版本分組
 	v1 := router.Group("/api/v1")
 	{
@@ -67,15 +71,36 @@ func SetupRoutes(router *gin.Engine, userHandler *UserHandler, imageHandler *Ima
 
 		}
 
-		// 申請 (Application) 相關路由
-		apps := v1.Group("/applications")
-		apps.Use(AuthMiddleware(cfg))
+		// Applications
+		applications := v1.Group("/applications")
+		applications.Use(AuthMiddleware(cfg)) // Assuming authMiddleware refers to AuthMiddleware(cfg)
 		{
-			apps.POST("", appHandler.Create)
-			apps.GET("", appHandler.List)
-			apps.GET("/:id", appHandler.GetByID)
-			apps.PUT("/:id", appHandler.UpdateStatus)
-			apps.DELETE("/:id", appHandler.Delete)
+			applications.POST("", appHandler.Create)
+			applications.GET("", appHandler.List)
+			applications.GET("/:id", appHandler.GetByID)
+			applications.PUT("/:id", appHandler.UpdateStatus)
+			applications.DELETE("/:id", appHandler.Delete)
+		}
+
+		// Notifications
+		notifications := v1.Group("/users/me/notifications")
+		notifications.Use(AuthMiddleware(cfg)) // Assuming authMiddleware refers to AuthMiddleware(cfg)
+		{
+			notifications.GET("", notifHandler.List)
+			notifications.PUT("/:id/read", notifHandler.MarkAsRead)
+			notifications.PUT("/read-all", notifHandler.MarkAllAsRead)
+		}
+
+		// Admin
+		admin := v1.Group("/admin")
+		admin.Use(AuthMiddleware(cfg))   // First check if authenticated
+		admin.Use(AdminAuthMiddleware()) // Then check if admin
+		{
+			admin.GET("/stats", adminHandler.GetStats)
+			admin.GET("/images/pending", adminHandler.ListPendingImages)
+			admin.PUT("/images/:id/review", adminHandler.ReviewImage)
+			admin.GET("/users", adminHandler.ListUsers)
+			admin.PUT("/users/:id/status", adminHandler.UpdateUserStatus)
 		}
 
 		// ... 其他資源的路由設定

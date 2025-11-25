@@ -8,12 +8,15 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type ImageRepository interface {
 	Create(ctx context.Context, image *domain.Image) error
 	GetByID(ctx context.Context, id string) (*domain.Image, error)
 	UpdateStatus(ctx context.Context, id string, status domain.ImageStatus) error
+	CountByStatus(ctx context.Context, status domain.ImageStatus) (int64, error)
+	ListByStatus(ctx context.Context, status domain.ImageStatus, limit, offset int64) ([]*domain.Image, int64, error)
 }
 
 type mongoImageRepository struct {
@@ -60,5 +63,32 @@ func (r *mongoImageRepository) UpdateStatus(ctx context.Context, id string, stat
 		},
 	}
 	_, err = r.collection.UpdateOne(ctx, bson.M{"_id": objID}, update)
+	_, err = r.collection.UpdateOne(ctx, bson.M{"_id": objID}, update)
 	return err
+}
+
+func (r *mongoImageRepository) CountByStatus(ctx context.Context, status domain.ImageStatus) (int64, error) {
+	return r.collection.CountDocuments(ctx, bson.M{"status": status})
+}
+
+func (r *mongoImageRepository) ListByStatus(ctx context.Context, status domain.ImageStatus, limit, offset int64) ([]*domain.Image, int64, error) {
+	filter := bson.M{"status": status}
+	total, err := r.collection.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	opts := options.Find().SetLimit(limit).SetSkip(offset).SetSort(bson.D{{Key: "createdAt", Value: -1}})
+	cursor, err := r.collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+
+	var images []*domain.Image
+	if err := cursor.All(ctx, &images); err != nil {
+		return nil, 0, err
+	}
+
+	return images, total, nil
 }

@@ -52,6 +52,21 @@ func (m *mockUserRepository) Update(ctx context.Context, id string, payload bson
 	return args.Error(0)
 }
 
+func (m *mockUserRepository) Count(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *mockUserRepository) List(ctx context.Context, filter bson.M, limit, offset int64) ([]*domain.User, int64, error) {
+	args := m.Called(ctx, filter, limit, offset)
+	return args.Get(0).([]*domain.User), args.Get(1).(int64), args.Error(2)
+}
+
+func (m *mockUserRepository) UpdateStatus(ctx context.Context, id string, status domain.UserStatus) error {
+	args := m.Called(ctx, id, status)
+	return args.Error(0)
+}
+
 func TestLoginUser(t *testing.T) {
 	// 準備加密後的密碼
 	password := "password123"

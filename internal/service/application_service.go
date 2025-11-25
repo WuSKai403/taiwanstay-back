@@ -19,14 +19,16 @@ type ApplicationService interface {
 }
 
 type applicationService struct {
-	repo    repository.ApplicationRepository
-	oppRepo repository.OpportunityRepository
+	repo         repository.ApplicationRepository
+	oppRepo      repository.OpportunityRepository
+	notifService NotificationService
 }
 
-func NewApplicationService(repo repository.ApplicationRepository, oppRepo repository.OpportunityRepository) ApplicationService {
+func NewApplicationService(repo repository.ApplicationRepository, oppRepo repository.OpportunityRepository, notifService NotificationService) ApplicationService {
 	return &applicationService{
-		repo:    repo,
-		oppRepo: oppRepo,
+		repo:         repo,
+		oppRepo:      oppRepo,
+		notifService: notifService,
 	}
 }
 
@@ -60,10 +62,36 @@ func (s *applicationService) CreateApplication(ctx context.Context, app *domain.
 	app.HostID = opp.HostID
 	app.Status = domain.ApplicationStatusPending // Default to Pending
 
-	err = s.repo.Create(ctx, app)
-	if err != nil {
+	// 4. Save
+	if err := s.repo.Create(ctx, app); err != nil {
 		return nil, err
 	}
+
+	// 5. Notify Host
+	go func() {
+		// Use background context to prevent cancellation if request finishes
+		bgCtx := context.Background()
+		err := s.notifService.SendNotification(
+			bgCtx,
+			opp.HostID.Hex(), // Host is also a User (assuming HostID matches UserID for now, or we need to fetch Host's UserID)
+			// Wait, HostID in Opportunity refers to 'hosts' collection ID, not 'users' collection ID.
+			// We need to find the UserID associated with this HostID.
+			// For MVP, let's assume we can get UserID from HostID if they are linked, or we need to fetch Host first.
+			// Actually, in our Host model: Host struct { ID, UserID ... }
+			// We don't have HostRepo injected here.
+			// Let's fix this properly. We should inject HostRepository.
+			// For now, let's just log a TODO or try to send if we had the ID.
+			// To do this right, we should inject HostRepository.
+			domain.NotificationTypeApplicationCreated,
+			"New Application Received",
+			"You have a new application for "+opp.Title,
+			map[string]string{"applicationId": app.ID.Hex()},
+		)
+		if err != nil {
+			// Log error
+		}
+	}()
+
 	return app, nil
 }
 

@@ -28,16 +28,22 @@
 *   [x] [P2] Opportunities: 刊登工作機會 (含 GeoJSON 座標與照片)。
 
 ### **Phase 3: 核心需求端 (Applications)**
-*   [P3] Search: 基礎列表查詢 (支援分頁與地理位置顯示)。
-*   [P3] Applications: 申請工作、取消申請。
-*   [P3] Review: 接待主審核申請。
+*   [x] [P3] Search: 基礎列表查詢 (支援分頁與地理位置顯示)。
+*   [x] [P3] Applications: 申請工作、取消申請。
+*   [x] [P3] Review: 接待主審核申請。
 
-### **Phase 4: 優化與安全 (Polish)**
-*   [P4] Indexing: 確保 MongoDB 索引 (Unique, Text, 2dsphere) 效能調優。
-*   [P4] Private Image Access: 實作私有圖片 (未審核圖片) 的讀取權限控制。
+### Phase 4: 核心體驗補完 (Core Experience Completion)
+*   [P4] **Notifications (通知)**: 補完申請流程的最後一哩路 (通知 Host 審核、通知 Guest 結果)。
+    *   包含 In-App 與 Email (Brevo + MailerLite)。
+*   [P4] **Admin Dashboard (管理後台)**: 包含「私有圖片讀取」與「審核介面」。
+    *   圖片審核: 列表待審核圖片、批次核准/駁回。
+    *   用戶管理: 列表用戶、停權。
+    *   數據概覽: 系統關鍵指標 (KPI)。
+*   [P4] **Bookmarks (收藏)**: 增加用戶黏著度，但非核心流程必要。
+*   [P4] **Indexing (索引優化)**: 效能優化，隨資料量增長進行。
 
-### **Phase 5: 暫停開發 (Post-MVP)**
-*   [暫停] Organizations / Bookmarks / Notifications
+### Phase 5: 暫停開發 (Post-MVP)
+*   [暫停] Organizations
 
 ---
 
@@ -184,6 +190,43 @@ type Image struct {
 *   **Application (申請)**:
     *   User 申請時需明確指定 `StartDate` 與 `EndDate`。
     *   Host 審核時，確認該特定日期區間是否可行，再行接受 (Accept)。
+
+### 4.2. 收藏功能 (Bookmarks)
+*   **設計**: 簡單的關聯表 (User <-> Opportunity)。
+*   **API**:
+    *   `POST /api/v1/opportunities/:id/bookmark`: 收藏。
+    *   `DELETE /api/v1/opportunities/:id/bookmark`: 取消收藏。
+    *   `GET /api/v1/users/me/bookmarks`: 查看我的收藏列表。
+
+### 4.3. 通知系統 (Notifications)
+*   **觸發時機 (Triggers)**:
+    1.  **Application Created**: 通知 Host 有新申請。
+    2.  **Application Status Changed**: 通知 Guest 申請被接受或拒絕。
+*   **雙重管道 (Channels)**:
+    *   **In-App**: 存入 MongoDB `notifications` collection，用戶登入後可查看未讀通知。
+    *   **Email**: 採用 **Brevo** 作為主要發送服務，**MailerLite** 作為備援 (Fallback)。
+*   **Domain Model**:
+    ```go
+    type Notification struct {
+        ID        primitive.ObjectID `bson:"_id"`
+        UserID    primitive.ObjectID `bson:"userId"` // 接收者
+        Type      string             `bson:"type"`   // e.g., "APP_STATUS_CHANGE", "NEW_APP"
+        Title     string             `bson:"title"`
+        Message   string             `bson:"message"`
+        IsRead    bool               `bson:"isRead"`
+        Data      map[string]string  `bson:"data"`   // 額外資訊 (e.g., {"applicationId": "..."})
+        CreatedAt time.Time          `bson:"createdAt"`
+    }
+    ```
+
+### 4.4. 管理後台 (Admin Dashboard)
+*   **目標**: 提供營運人員審核內容與管理用戶的介面。
+*   **API**:
+    *   `GET /api/v1/admin/stats`: 系統概況 (總用戶數、待審核圖片數、今日申請數)。
+    *   `GET /api/v1/admin/images/pending`: 取得待審核圖片列表 (需配合 Private Image Access)。
+    *   `PUT /api/v1/admin/images/:id/review`: 審核圖片 (Approve/Reject)。
+    *   `GET /api/v1/admin/users`: 用戶列表 (支援篩選 Role: User/Host)。
+    *   `PUT /api/v1/admin/users/:id/status`: 停權/復權用戶。
 
 ---
 

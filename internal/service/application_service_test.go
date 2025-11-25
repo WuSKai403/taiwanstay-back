@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"time"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/taiwanstay/taiwanstay-back/internal/domain"
@@ -45,6 +47,11 @@ func (m *MockApplicationRepository) Delete(ctx context.Context, id string) error
 	return args.Error(0)
 }
 
+func (m *MockApplicationRepository) CountByDate(ctx context.Context, date time.Time) (int64, error) {
+	args := m.Called(ctx, date)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 type MockOpportunityRepository struct {
 	mock.Mock
 }
@@ -77,11 +84,36 @@ func (m *MockOpportunityRepository) Search(ctx context.Context, filter repositor
 	return args.Get(0).([]*domain.Opportunity), args.Get(1).(int64), args.Error(2)
 }
 
+type MockNotificationService struct {
+	mock.Mock
+}
+
+func (m *MockNotificationService) SendNotification(ctx context.Context, userID string, notifType domain.NotificationType, title, message string, data map[string]string) error {
+	args := m.Called(ctx, userID, notifType, title, message, data)
+	return args.Error(0)
+}
+
+func (m *MockNotificationService) ListNotifications(ctx context.Context, userID string, limit, offset int64) ([]*domain.Notification, int64, error) {
+	args := m.Called(ctx, userID, limit, offset)
+	return args.Get(0).([]*domain.Notification), args.Get(1).(int64), args.Error(2)
+}
+
+func (m *MockNotificationService) MarkAsRead(ctx context.Context, id string, userID string) error {
+	args := m.Called(ctx, id, userID)
+	return args.Error(0)
+}
+
+func (m *MockNotificationService) MarkAllAsRead(ctx context.Context, userID string) error {
+	args := m.Called(ctx, userID)
+	return args.Error(0)
+}
+
 // Tests
 func TestCreateApplication_Success(t *testing.T) {
 	mockAppRepo := new(MockApplicationRepository)
 	mockOppRepo := new(MockOpportunityRepository)
-	service := NewApplicationService(mockAppRepo, mockOppRepo)
+	mockNotifService := new(MockNotificationService)
+	service := NewApplicationService(mockAppRepo, mockOppRepo, mockNotifService)
 
 	ctx := context.Background()
 	oppID := primitive.NewObjectID()
@@ -111,6 +143,7 @@ func TestCreateApplication_Success(t *testing.T) {
 
 	mockOppRepo.On("GetByID", ctx, oppID.Hex()).Return(opp, nil)
 	mockAppRepo.On("Create", ctx, app).Return(nil)
+	mockNotifService.On("SendNotification", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	createdApp, err := service.CreateApplication(ctx, app)
 
@@ -125,7 +158,8 @@ func TestCreateApplication_Success(t *testing.T) {
 func TestCreateApplication_InvalidDates(t *testing.T) {
 	mockAppRepo := new(MockApplicationRepository)
 	mockOppRepo := new(MockOpportunityRepository)
-	service := NewApplicationService(mockAppRepo, mockOppRepo)
+	mockNotifService := new(MockNotificationService)
+	service := NewApplicationService(mockAppRepo, mockOppRepo, mockNotifService)
 
 	ctx := context.Background()
 	oppID := primitive.NewObjectID()
