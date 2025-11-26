@@ -16,6 +16,7 @@ type OpportunityRepository interface {
 	GetByID(ctx context.Context, id string) (*domain.Opportunity, error)
 	List(ctx context.Context, filter bson.M, limit, offset int64) ([]*domain.Opportunity, error)
 	Update(ctx context.Context, id string, opp *domain.Opportunity) error
+	Delete(ctx context.Context, id string) error
 	Search(ctx context.Context, filter OpportunityFilter) ([]*domain.Opportunity, int64, error)
 }
 
@@ -126,6 +127,21 @@ func (r *mongoOpportunityRepository) Update(ctx context.Context, id string, opp 
 	}
 	opp.UpdatedAt = time.Now()
 	_, err = r.collection.ReplaceOne(ctx, bson.M{"_id": objID}, opp)
+	return err
+}
+
+func (r *mongoOpportunityRepository) Delete(ctx context.Context, id string) error {
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return err
+	}
+	update := bson.M{
+		"$set": bson.M{
+			"status":    domain.OpportunityStatusDeleted,
+			"updatedAt": time.Now(),
+		},
+	}
+	_, err = r.collection.UpdateOne(ctx, bson.M{"_id": objID}, update)
 	return err
 }
 

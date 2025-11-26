@@ -11,10 +11,14 @@ import (
 
 type AdminHandler struct {
 	adminService service.AdminService
+	oppService   service.OpportunityService
 }
 
-func NewAdminHandler(adminService service.AdminService) *AdminHandler {
-	return &AdminHandler{adminService: adminService}
+func NewAdminHandler(adminService service.AdminService, oppService service.OpportunityService) *AdminHandler {
+	return &AdminHandler{
+		adminService: adminService,
+		oppService:   oppService,
+	}
 }
 
 func (h *AdminHandler) GetStats(c *gin.Context) {
@@ -99,4 +103,40 @@ func (h *AdminHandler) UpdateUserStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "user status updated"})
+}
+
+func (h *AdminHandler) UpdateOpportunity(c *gin.Context) {
+	id := c.Param("id")
+	var req domain.Opportunity
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	existing, err := h.oppService.GetOpportunityByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "opportunity not found"})
+		return
+	}
+
+	req.ID = existing.ID
+	req.HostID = existing.HostID
+
+	err = h.oppService.UpdateOpportunity(c.Request.Context(), id, &req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update opportunity"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "opportunity updated by admin"})
+}
+
+func (h *AdminHandler) DeleteOpportunity(c *gin.Context) {
+	id := c.Param("id")
+	err := h.oppService.DeleteOpportunity(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete opportunity"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "opportunity deleted by admin"})
 }

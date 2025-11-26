@@ -17,6 +17,7 @@ const (
 	OpportunityStatusFilled      OpportunityStatus = "FILLED"
 	OpportunityStatusRejected    OpportunityStatus = "REJECTED"
 	OpportunityStatusAdminPaused OpportunityStatus = "ADMIN_PAUSED"
+	OpportunityStatusDeleted     OpportunityStatus = "DELETED"
 )
 
 type OpportunityType string

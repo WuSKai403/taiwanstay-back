@@ -79,6 +79,11 @@ func (m *MockOpportunityRepository) Update(ctx context.Context, id string, opp *
 	return args.Error(0)
 }
 
+func (m *MockOpportunityRepository) Delete(ctx context.Context, id string) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
 func (m *MockOpportunityRepository) Search(ctx context.Context, filter repository.OpportunityFilter) ([]*domain.Opportunity, int64, error) {
 	args := m.Called(ctx, filter)
 	return args.Get(0).([]*domain.Opportunity), args.Get(1).(int64), args.Error(2)

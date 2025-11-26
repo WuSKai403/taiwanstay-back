@@ -67,6 +67,8 @@ func SetupRoutes(router *gin.Engine, userHandler *UserHandler, imageHandler *Ima
 			authOpps.Use(AuthMiddleware(cfg))
 			{
 				authOpps.POST("", oppHandler.Create)
+				authOpps.PUT("/:id", oppHandler.Update)
+				authOpps.DELETE("/:id", oppHandler.Delete)
 				authOpps.POST("/:id/bookmark", bookmarkHandler.AddBookmark)
 				authOpps.DELETE("/:id/bookmark", bookmarkHandler.RemoveBookmark)
 			}
@@ -110,6 +112,8 @@ func SetupRoutes(router *gin.Engine, userHandler *UserHandler, imageHandler *Ima
 			admin.PUT("/images/:id/review", adminHandler.ReviewImage)
 			admin.GET("/users", adminHandler.ListUsers)
 			admin.PUT("/users/:id/status", adminHandler.UpdateUserStatus)
+			admin.PUT("/opportunities/:id", adminHandler.UpdateOpportunity)
+			admin.DELETE("/opportunities/:id", adminHandler.DeleteOpportunity)
 		}
 
 		// ... 其他資源的路由設定

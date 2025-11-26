@@ -89,7 +89,7 @@ func main() {
 	oppHandler := api.NewOpportunityHandler(oppService, hostService)
 	appHandler := api.NewApplicationHandler(appService)
 	notifHandler := api.NewNotificationHandler(notifService)
-	adminHandler := api.NewAdminHandler(adminService)
+	adminHandler := api.NewAdminHandler(adminService, oppService)
 	bookmarkHandler := api.NewBookmarkHandler(bookmarkService)
 
 	// 6. Setup Server

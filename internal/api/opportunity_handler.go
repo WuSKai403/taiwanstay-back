@@ -86,6 +86,11 @@ func (h *OpportunityHandler) List(c *gin.Context) {
 		filter["hostId"] = objID
 	}
 
+	// Exclude deleted opportunities
+	if _, ok := filter["status"]; !ok {
+		filter["status"] = bson.M{"$ne": domain.OpportunityStatusDeleted}
+	}
+
 	opps, err := h.oppService.ListOpportunities(c.Request.Context(), filter, limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list opportunities"})
@@ -137,4 +142,94 @@ func (h *OpportunityHandler) Search(c *gin.Context) {
 		"data":  opps,
 		"total": total,
 	})
+}
+
+func (h *OpportunityHandler) Update(c *gin.Context) {
+	id := c.Param("id")
+	var req domain.Opportunity
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 1. Get User ID -> Host ID
+	claims, exists := c.Get("userClaims")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	mapClaims := claims.(jwt.MapClaims)
+	userID := mapClaims["sub"].(string)
+
+	host, err := h.hostService.GetHostByUserID(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "user is not a host"})
+		return
+	}
+
+	// 2. Get Existing Opportunity
+	existingOpp, err := h.oppService.GetOpportunityByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "opportunity not found"})
+		return
+	}
+
+	// 3. Check Ownership
+	if existingOpp.HostID != host.ID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you do not own this opportunity"})
+		return
+	}
+
+	// 4. Update
+	req.ID = existingOpp.ID
+	req.HostID = existingOpp.HostID
+
+	err = h.oppService.UpdateOpportunity(c.Request.Context(), id, &req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update opportunity"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "opportunity updated"})
+}
+
+func (h *OpportunityHandler) Delete(c *gin.Context) {
+	id := c.Param("id")
+
+	// 1. Get User ID -> Host ID
+	claims, exists := c.Get("userClaims")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	mapClaims := claims.(jwt.MapClaims)
+	userID := mapClaims["sub"].(string)
+
+	host, err := h.hostService.GetHostByUserID(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "user is not a host"})
+		return
+	}
+
+	// 2. Get Existing Opportunity
+	existingOpp, err := h.oppService.GetOpportunityByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "opportunity not found"})
+		return
+	}
+
+	// 3. Check Ownership
+	if existingOpp.HostID != host.ID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you do not own this opportunity"})
+		return
+	}
+
+	// 4. Delete
+	err = h.oppService.DeleteOpportunity(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete opportunity"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "opportunity deleted"})
 }
