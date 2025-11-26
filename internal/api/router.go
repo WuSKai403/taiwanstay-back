@@ -6,7 +6,7 @@ import (
 )
 
 // SetupRoutes 負責設定所有 API 路由
-func SetupRoutes(router *gin.Engine, userHandler *UserHandler, imageHandler *ImageHandler, hostHandler *HostHandler, oppHandler *OpportunityHandler, appHandler *ApplicationHandler, notifHandler *NotificationHandler, adminHandler *AdminHandler, cfg *config.Config) {
+func SetupRoutes(router *gin.Engine, userHandler *UserHandler, imageHandler *ImageHandler, hostHandler *HostHandler, oppHandler *OpportunityHandler, appHandler *ApplicationHandler, notifHandler *NotificationHandler, adminHandler *AdminHandler, bookmarkHandler *BookmarkHandler, cfg *config.Config) {
 	// Global Middleware
 	router.Use(gin.Recovery())
 	router.Use(Logger())
@@ -67,6 +67,8 @@ func SetupRoutes(router *gin.Engine, userHandler *UserHandler, imageHandler *Ima
 			authOpps.Use(AuthMiddleware(cfg))
 			{
 				authOpps.POST("", oppHandler.Create)
+				authOpps.POST("/:id/bookmark", bookmarkHandler.AddBookmark)
+				authOpps.DELETE("/:id/bookmark", bookmarkHandler.RemoveBookmark)
 			}
 
 		}
@@ -89,6 +91,13 @@ func SetupRoutes(router *gin.Engine, userHandler *UserHandler, imageHandler *Ima
 			notifications.GET("", notifHandler.List)
 			notifications.PUT("/:id/read", notifHandler.MarkAsRead)
 			notifications.PUT("/read-all", notifHandler.MarkAllAsRead)
+		}
+
+		// Bookmarks (List)
+		bookmarks := v1.Group("/users/me/bookmarks")
+		bookmarks.Use(AuthMiddleware(cfg))
+		{
+			bookmarks.GET("", bookmarkHandler.ListBookmarks)
 		}
 
 		// Admin

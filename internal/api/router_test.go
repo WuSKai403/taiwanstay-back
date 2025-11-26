@@ -25,6 +25,7 @@ import (
 	"github.com/taiwanstay/taiwanstay-back/internal/repository"
 	"github.com/taiwanstay/taiwanstay-back/internal/service"
 	"github.com/taiwanstay/taiwanstay-back/pkg/config"
+	"github.com/taiwanstay/taiwanstay-back/pkg/logger"
 )
 
 var (
@@ -45,6 +46,9 @@ func TestMain(m *testing.M) {
 			Mode:      "test",
 		},
 	}
+
+	// Init Logger
+	logger.InitLogger("test")
 
 	// 啟動 MongoDB 容器
 	mongodbContainer, err := mongodb.Run(ctx, "mongo:6")
@@ -89,7 +93,7 @@ func setupTestRouter(collection *mongo.Collection) *gin.Engine {
 
 	router := gin.Default()
 	// Pass nil for ImageHandler, HostHandler, OppHandler, AppHandler as we are not testing them here yet
-	SetupRoutes(router, userHandler, nil, nil, nil, nil, nil, nil, testConfig)
+	SetupRoutes(router, userHandler, nil, nil, nil, nil, nil, nil, nil, testConfig)
 	return router
 }
 
@@ -419,7 +423,7 @@ func TestAdminActions_SuccessAsAdmin(t *testing.T) {
 	assert.NotEqual(t, adminUser.ID, normalUser.ID)
 
 	// 2. 作為管理員，嘗試獲取所有使用者
-	reqGetAll, _ := http.NewRequestWithContext(ctx, "GET", "/api/v1/users/", nil)
+	reqGetAll, _ := http.NewRequestWithContext(ctx, "GET", "/api/v1/users", nil)
 	reqGetAll.Header.Set("Authorization", "Bearer "+adminToken)
 	wGetAll := httptest.NewRecorder()
 	testRouter.ServeHTTP(wGetAll, reqGetAll)
@@ -454,7 +458,7 @@ func TestAdminActions_ForbiddenAsUser(t *testing.T) {
 	user2, _ := createAndLoginUser(t, ctx, "user2", "user2@example.com", "password123", domain.RoleUser)
 
 	// 2. 作為普通使用者，嘗試獲取所有使用者
-	reqGetAll, _ := http.NewRequestWithContext(ctx, "GET", "/api/v1/users/", nil)
+	reqGetAll, _ := http.NewRequestWithContext(ctx, "GET", "/api/v1/users", nil)
 	reqGetAll.Header.Set("Authorization", "Bearer "+user1Token)
 	wGetAll := httptest.NewRecorder()
 	testRouter.ServeHTTP(wGetAll, reqGetAll)

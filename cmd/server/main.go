@@ -66,6 +66,7 @@ func main() {
 	oppRepo := repository.NewOpportunityRepository(db.Collection("opportunities"))
 	appRepo := repository.NewApplicationRepository(db.Collection("applications"))
 	notifRepo := repository.NewNotificationRepository(db.Collection("notifications"))
+	bookmarkRepo := repository.NewBookmarkRepository(db.Collection("bookmarks"))
 
 	// Services
 	userService := service.NewUserService(userRepo, cfg)
@@ -77,8 +78,9 @@ func main() {
 	hostService := service.NewHostService(hostRepo)
 	oppService := service.NewOpportunityService(oppRepo)
 	notifService := service.NewNotificationService(notifRepo, userRepo, emailSender)
-	appService := service.NewApplicationService(appRepo, oppRepo, notifService)
+	appService := service.NewApplicationService(appRepo, oppRepo, hostRepo, notifService)
 	adminService := service.NewAdminService(userRepo, imageRepo, appRepo, imageService)
+	bookmarkService := service.NewBookmarkService(bookmarkRepo, oppRepo)
 
 	// Handlers
 	userHandler := api.NewUserHandler(userService)
@@ -88,6 +90,7 @@ func main() {
 	appHandler := api.NewApplicationHandler(appService)
 	notifHandler := api.NewNotificationHandler(notifService)
 	adminHandler := api.NewAdminHandler(adminService)
+	bookmarkHandler := api.NewBookmarkHandler(bookmarkService)
 
 	// 6. Setup Server
 	if cfg.Server.Mode == "release" {
@@ -96,7 +99,7 @@ func main() {
 	router := gin.Default()
 
 	// Setup Routes
-	api.SetupRoutes(router, userHandler, imageHandler, hostHandler, oppHandler, appHandler, notifHandler, adminHandler, cfg)
+	api.SetupRoutes(router, userHandler, imageHandler, hostHandler, oppHandler, appHandler, notifHandler, adminHandler, bookmarkHandler, cfg)
 
 	// 7. Run Server
 	addr := ":" + cfg.Server.Port

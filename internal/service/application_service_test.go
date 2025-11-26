@@ -112,12 +112,14 @@ func (m *MockNotificationService) MarkAllAsRead(ctx context.Context, userID stri
 func TestCreateApplication_Success(t *testing.T) {
 	mockAppRepo := new(MockApplicationRepository)
 	mockOppRepo := new(MockOpportunityRepository)
+	mockHostRepo := new(MockHostRepository)
 	mockNotifService := new(MockNotificationService)
-	service := NewApplicationService(mockAppRepo, mockOppRepo, mockNotifService)
+	service := NewApplicationService(mockAppRepo, mockOppRepo, mockHostRepo, mockNotifService)
 
 	ctx := context.Background()
 	oppID := primitive.NewObjectID()
 	hostID := primitive.NewObjectID()
+	userID := primitive.NewObjectID()
 
 	// Opportunity with valid time slot
 	opp := &domain.Opportunity{
@@ -131,6 +133,7 @@ func TestCreateApplication_Success(t *testing.T) {
 				Status:    domain.TimeSlotStatusOpen,
 			},
 		},
+		Title: "Test Opportunity",
 	}
 
 	app := &domain.Application{
@@ -141,9 +144,16 @@ func TestCreateApplication_Success(t *testing.T) {
 		},
 	}
 
+	host := &domain.Host{
+		ID:     hostID,
+		UserID: userID,
+	}
+
 	mockOppRepo.On("GetByID", ctx, oppID.Hex()).Return(opp, nil)
 	mockAppRepo.On("Create", ctx, app).Return(nil)
-	mockNotifService.On("SendNotification", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	// Expect GetByID to be called with background context
+	mockHostRepo.On("GetByID", mock.Anything, hostID.Hex()).Return(host, nil)
+	mockNotifService.On("SendNotification", mock.Anything, userID.Hex(), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	createdApp, err := service.CreateApplication(ctx, app)
 
@@ -151,15 +161,22 @@ func TestCreateApplication_Success(t *testing.T) {
 	assert.NotNil(t, createdApp)
 	assert.Equal(t, domain.ApplicationStatusPending, createdApp.Status)
 	assert.Equal(t, hostID, createdApp.HostID)
+
+	// Wait for goroutine
+	time.Sleep(100 * time.Millisecond)
+
 	mockOppRepo.AssertExpectations(t)
 	mockAppRepo.AssertExpectations(t)
+	mockHostRepo.AssertExpectations(t)
+	mockNotifService.AssertExpectations(t)
 }
 
 func TestCreateApplication_InvalidDates(t *testing.T) {
 	mockAppRepo := new(MockApplicationRepository)
 	mockOppRepo := new(MockOpportunityRepository)
+	mockHostRepo := new(MockHostRepository)
 	mockNotifService := new(MockNotificationService)
-	service := NewApplicationService(mockAppRepo, mockOppRepo, mockNotifService)
+	service := NewApplicationService(mockAppRepo, mockOppRepo, mockHostRepo, mockNotifService)
 
 	ctx := context.Background()
 	oppID := primitive.NewObjectID()

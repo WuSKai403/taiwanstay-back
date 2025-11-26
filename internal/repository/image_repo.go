@@ -24,6 +24,16 @@ type mongoImageRepository struct {
 }
 
 func NewImageRepository(collection *mongo.Collection) ImageRepository {
+	// Create Indexes
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Indexes for filtering
+	collection.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "userId", Value: 1}}},
+		{Keys: bson.D{{Key: "status", Value: 1}}},
+	})
+
 	return &mongoImageRepository{collection: collection}
 }
 

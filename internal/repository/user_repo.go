@@ -31,6 +31,16 @@ type mongoUserRepository struct {
 
 // NewUserRepository 建立一個新的 UserRepository 實例
 func NewUserRepository(collection *mongo.Collection) UserRepository {
+	// Create Indexes
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Unique index for email
+	collection.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "email", Value: 1}},
+		Options: options.Index().SetUnique(true),
+	})
+
 	return &mongoUserRepository{collection: collection}
 }
 

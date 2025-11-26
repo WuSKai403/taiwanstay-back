@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/taiwanstay/taiwanstay-back/internal/domain"
 	"go.mongodb.org/mongo-driver/bson"
@@ -22,6 +23,16 @@ type mongoNotificationRepository struct {
 }
 
 func NewNotificationRepository(collection *mongo.Collection) NotificationRepository {
+	// Create Indexes
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Indexes for filtering
+	collection.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "userId", Value: 1}}},
+		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "isRead", Value: 1}}},
+	})
+
 	return &mongoNotificationRepository{collection: collection}
 }
 
